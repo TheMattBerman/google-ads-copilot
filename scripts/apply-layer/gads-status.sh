@@ -73,9 +73,13 @@ if $SHOW_ALL; then
 
   # Check account file
   if [ -f "$ACCOUNT_FILE" ]; then
-    account_name=$(grep -oP 'Descriptive Name: \K.*' "$ACCOUNT_FILE" 2>/dev/null || grep -oP 'Name: \K.*' "$ACCOUNT_FILE" 2>/dev/null || echo "Unknown")
-    account_id=$(grep -oP 'Customer ID: \K\d+' "$ACCOUNT_FILE" 2>/dev/null || echo "Unknown")
-    last_verified=$(grep -oP 'Last verified: \K.*' "$ACCOUNT_FILE" 2>/dev/null || echo "Unknown")
+    account_name=$(gads_markdown_field "$ACCOUNT_FILE" "Descriptive Name")
+    [ -z "$account_name" ] && account_name=$(gads_markdown_field "$ACCOUNT_FILE" "Name")
+    [ -z "$account_name" ] && account_name="Unknown"
+    account_id=$(gads_markdown_field "$ACCOUNT_FILE" "Customer ID")
+    [ -z "$account_id" ] && account_id="Unknown"
+    last_verified=$(gads_markdown_field "$ACCOUNT_FILE" "Last verified")
+    [ -z "$last_verified" ] && last_verified="Unknown"
     echo -e "│  Account:   ${GREEN}${account_name}${NC} (${account_id})"
     echo -e "│  Verified:  ${last_verified}"
   else
@@ -114,15 +118,13 @@ if $SHOW_ALL || $SHOW_PENDING; then
       # Skip index/summary files
       [[ "$draft_name" == _* ]] && continue
 
-      status=$(grep -oP '^Status: \K.*' "$draft_file" 2>/dev/null || echo "unknown")
+      status=$(awk 'index($0, "Status: ") == 1 { print substr($0, 9); exit }' "$draft_file")
+      [ -z "$status" ] && status="unknown"
       if [ "$status" = "proposed" ] || [ "$status" = "approved" ]; then
         pending_count=$((pending_count + 1))
 
         # Extract summary line
-        summary=$(grep -oP '^## Summary\n\K.*' "$draft_file" 2>/dev/null | head -1 || echo "")
-        if [ -z "$summary" ]; then
-          summary=$(sed -n '/^## Summary/{n;p;}' "$draft_file" 2>/dev/null | head -c 80)
-        fi
+        summary=$(gads_heading_body_line "$draft_file" "## Summary" | head -c 80)
 
         status_icon="📋"
         [ "$status" = "approved" ] && status_icon="✅"
@@ -208,7 +210,6 @@ if $SHOW_ALL || $SHOW_APPLIED; then
 
       # Show last 5 sessions (headers only)
       grep '^## .* — Apply Session' "$LOG_FILE" | tail -5 | while read -r line; do
-        session_date=$(echo "$line" | grep -oP '## \K[^ ]+')
         echo -e "│  📝 ${line#\#\# }"
       done
 

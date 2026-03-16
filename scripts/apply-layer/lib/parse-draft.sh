@@ -34,13 +34,17 @@
 
 set -euo pipefail
 
+_first_quoted_value() {
+  printf '%s\n' "$1" | sed -nE 's/^[^"]*"([^"]+)".*/\1/p' | head -1
+}
+
 # Parse the draft header to extract account info
 parse_draft_header() {
   local draft_file="$1"
 
   local customer_id customer_name status
   # Account line: "Account: Acme Equipment Co. (1234567890)"
-  customer_id=$(grep -oP '\((\d{10})\)' "$draft_file" | head -1 | tr -d '()')
+  customer_id=$(sed -nE 's/.*\(([0-9]{10})\).*/\1/p' "$draft_file" | head -1)
   customer_name=$(grep '^Account:' "$draft_file" | head -1 | sed 's/Account: //' | sed 's/ (.*//')
   status=$(grep '^Status:' "$draft_file" | head -1 | sed 's/Status: //')
 
@@ -76,7 +80,7 @@ _parse_section_a() {
 
   while IFS= read -r line; do
     # Start of a new negative block
-    if echo "$line" | grep -qP '^### Negative \d+:'; then
+    if [[ "$line" =~ ^###\ Negative\ [0-9]+: ]]; then
       # Save previous block if we have one
       if [ -n "$current_index" ]; then
         actions=$(echo "$actions" | jq \
@@ -100,8 +104,8 @@ _parse_section_a() {
       fi
 
       # Parse new block header: ### Negative 1: "near me"
-      current_index=$(echo "$line" | grep -oP '\d+' | head -1)
-      current_keyword=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+      current_index=$(printf '%s\n' "$line" | sed -nE 's/^### Negative ([0-9]+):.*/\1/p')
+      current_keyword=$(_first_quoted_value "$line")
       current_match_type=""
       current_scope=""
       current_campaign=""
@@ -110,27 +114,27 @@ _parse_section_a() {
     fi
 
     # Parse fields within a block
-    if echo "$line" | grep -qP '^\- \*\*Match type:\*\*'; then
+    if [[ "$line" == '- **Match type:**'* ]]; then
       current_match_type=$(echo "$line" | sed 's/.*\*\*Match type:\*\* *//' | tr '[:lower:]' '[:upper:]')
     fi
 
-    if echo "$line" | grep -qP '^\- \*\*Scope:\*\*'; then
+    if [[ "$line" == '- **Scope:**'* ]]; then
       local scope_line
       scope_line=$(echo "$line" | sed 's/.*\*\*Scope:\*\* *//')
-      if echo "$scope_line" | grep -qi 'Ad Group'; then
+      if [[ "$scope_line" == *"Ad Group"* ]]; then
         current_scope="AD_GROUP"
-        current_adgroup=$(echo "$scope_line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+        current_adgroup=$(_first_quoted_value "$scope_line")
         # Also extract campaign if both are listed
-        if echo "$scope_line" | grep -qi 'Campaign'; then
-          current_campaign=$(echo "$scope_line" | grep -oP 'Campaign "[^"]+"' | grep -oP '"[^"]+"' | tr -d '"')
+        if [[ "$scope_line" == *'Campaign "'* ]]; then
+          current_campaign=$(printf '%s\n' "$scope_line" | sed -nE 's/.*Campaign "([^"]+)".*/\1/p')
         fi
-      elif echo "$scope_line" | grep -qi 'Campaign'; then
+      elif [[ "$scope_line" == *"Campaign"* ]]; then
         current_scope="CAMPAIGN"
-        current_campaign=$(echo "$scope_line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+        current_campaign=$(_first_quoted_value "$scope_line")
       fi
     fi
 
-    if echo "$line" | grep -qP '^\- \*\*Reason:\*\*'; then
+    if [[ "$line" == '- **Reason:**'* ]]; then
       current_reason=$(echo "$line" | sed 's/.*\*\*Reason:\*\* *//' | head -c 200)
     fi
 
@@ -191,45 +195,52 @@ _parse_section_d() {
 
   while IFS= read -r line; do
     # Header: ### ⚠️ Pause or Narrow: "waste management" [EXACT MATCH]
-    if echo "$line" | grep -qiP '(pause|⚠️).*"[^"]+"'; then
-      keyword=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
-      match_type=$(echo "$line" | grep -oiP '\[(EXACT|PHRASE|BROAD)' | head -1 | tr -d '[' | tr '[:lower:]' '[:upper:]')
+    if [[ "$line" == *'"'*'"'* ]] && [[ "${line,,}" == *pause* ]]; then
+      keyword=$(_first_quoted_value "$line")
+      match_type=$(printf '%s\n' "$line" | sed -nE 's/.*\[(EXACT|PHRASE|BROAD).*/\1/ip' | head -1 | tr '[:lower:]' '[:upper:]')
       [ -z "$match_type" ] && match_type="EXACT"
     fi
 
     # Current state line: - **Current state:** EXACT match, ENABLED, in "High-Intent Buyers" ad group
-    if echo "$line" | grep -qP '^\- \*\*Current state:\*\*'; then
-      adgroup=$(echo "$line" | grep -oP 'in "[^"]+"' | grep -oP '"[^"]+"' | tr -d '"')
+    if [[ "$line" == '- **Current state:**'* ]]; then
+      adgroup=$(printf '%s\n' "$line" | sed -nE 's/.*in "([^"]+)".*/\1/p')
     fi
 
     # Ad group field: - **Ad group:** "High-Intent Buyers"
-    if echo "$line" | grep -qP '^\- \*\*Ad group:\*\*'; then
-      adgroup=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+    if [[ "$line" == '- **Ad group:**'* ]]; then
+      adgroup=$(_first_quoted_value "$line")
     fi
 
     # Campaign field: - **Campaign:** "Website traffic-Search"
-    if echo "$line" | grep -qP '^\- \*\*Campaign:\*\*'; then
-      campaign=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+    if [[ "$line" == '- **Campaign:**'* ]]; then
+      campaign=$(_first_quoted_value "$line")
     fi
 
     # Look for campaign mentions in the section (multiple patterns)
-    if echo "$line" | grep -qP 'Campaign.*"[^"]+"'; then
-      campaign=$(echo "$line" | grep -oP 'Campaign.*"[^"]+"' | grep -oP '"[^"]+"' | head -1 | tr -d '"')
-    elif echo "$line" | grep -qP 'campaign.*"[^"]+"'; then
+    if [[ "$line" == *'Campaign "'* ]]; then
+      campaign=$(printf '%s\n' "$line" | sed -nE 's/.*Campaign.*"([^"]+)".*/\1/p' | head -1)
+    elif [[ "$line" == *'campaign "'* ]]; then
       local maybe_campaign
-      maybe_campaign=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+      maybe_campaign=$(_first_quoted_value "$line")
       [ -n "$maybe_campaign" ] && campaign="$maybe_campaign"
     fi
 
     # Recommendation line confirms it's a pause
-    if echo "$line" | grep -qiP '^\- \*\*Recommendation:\*\*.*PAUSE'; then
+    if [[ "$line" == '- **Recommendation:**'* ]] && [[ "${line^^}" == *PAUSE* ]]; then
       # Fallback: if campaign not found in Section D, try to find it in the full draft
       if [ -z "$campaign" ]; then
-        campaign=$(grep -oP 'Campaign "[^"]+"' "$draft_file" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+        campaign=$(sed -nE 's/.*Campaign "([^"]+)".*/\1/p' "$draft_file" | head -1)
       fi
       # Last resort: use the first campaign from Section A
       if [ -z "$campaign" ]; then
-        campaign=$(grep -P '^\- \*\*Scope:\*\*.*Campaign' "$draft_file" | head -1 | grep -oP '"[^"]+"' | tr -d '"')
+        campaign=$(awk '
+          index($0, "- **Scope:**") == 1 && index($0, "Campaign") {
+            if (match($0, /"[^"]+"/)) {
+              print substr($0, RSTART + 1, RLENGTH - 2)
+              exit
+            }
+          }
+        ' "$draft_file")
       fi
 
       if [ -n "$keyword" ]; then
@@ -273,7 +284,7 @@ _parse_pause_sections() {
 
     while IFS= read -r line; do
       # Header: ### Keyword Pause 1: "waste management" [EXACT]
-      if echo "$line" | grep -qiP '^### Keyword Pause \d+:'; then
+      if [[ "$line" =~ ^###\ Keyword\ Pause\ [0-9]+: ]]; then
         # Save previous block
         if [ -n "$kw_keyword" ] && [ "$kw_status" = "ENABLED" ]; then
           actions=$(echo "$actions" | jq \
@@ -294,8 +305,8 @@ _parse_pause_sections() {
             }]')
         fi
 
-        kw_keyword=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
-        kw_match_type=$(echo "$line" | grep -oiP '\[(EXACT|PHRASE|BROAD)' | head -1 | tr -d '[' | tr '[:lower:]' '[:upper:]')
+        kw_keyword=$(_first_quoted_value "$line")
+        kw_match_type=$(printf '%s\n' "$line" | sed -nE 's/.*\[(EXACT|PHRASE|BROAD).*/\1/ip' | head -1 | tr '[:lower:]' '[:upper:]')
         kw_campaign=""
         kw_adgroup=""
         kw_reason=""
@@ -303,19 +314,19 @@ _parse_pause_sections() {
       fi
 
       # Field parsing
-      if echo "$line" | grep -qP '^\- \*\*Campaign:\*\*'; then
-        kw_campaign=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+      if [[ "$line" == '- **Campaign:**'* ]]; then
+        kw_campaign=$(_first_quoted_value "$line")
       fi
-      if echo "$line" | grep -qP '^\- \*\*Ad group:\*\*'; then
-        kw_adgroup=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+      if [[ "$line" == '- **Ad group:**'* ]]; then
+        kw_adgroup=$(_first_quoted_value "$line")
       fi
-      if echo "$line" | grep -qP '^\- \*\*Match type:\*\*'; then
+      if [[ "$line" == '- **Match type:**'* ]]; then
         kw_match_type=$(echo "$line" | sed 's/.*\*\*Match type:\*\* *//' | tr '[:lower:]' '[:upper:]')
       fi
-      if echo "$line" | grep -qP '^\- \*\*Current status:\*\*'; then
+      if [[ "$line" == '- **Current status:**'* ]]; then
         kw_status=$(echo "$line" | sed 's/.*\*\*Current status:\*\* *//' | tr '[:lower:]' '[:upper:]')
       fi
-      if echo "$line" | grep -qP '^\- \*\*Problem:\*\*'; then
+      if [[ "$line" == '- **Problem:**'* ]]; then
         kw_reason=$(echo "$line" | sed 's/.*\*\*Problem:\*\* *//' | head -c 200)
       fi
     done <<< "$section_kw_pause"
@@ -350,7 +361,7 @@ _parse_pause_sections() {
 
     while IFS= read -r line; do
       # Header: ### Ad Group Pause 1: "High-Intent Buyers"
-      if echo "$line" | grep -qiP '^### Ad Group Pause \d+:'; then
+      if [[ "$line" =~ ^###\ Ad\ Group\ Pause\ [0-9]+: ]]; then
         # Save previous block
         if [ -n "$ag_name" ] && [ "$ag_status" = "ENABLED" ]; then
           actions=$(echo "$actions" | jq \
@@ -369,20 +380,20 @@ _parse_pause_sections() {
             }]')
         fi
 
-        ag_name=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+        ag_name=$(_first_quoted_value "$line")
         ag_campaign=""
         ag_reason=""
         ag_status=""
       fi
 
       # Field parsing
-      if echo "$line" | grep -qP '^\- \*\*Campaign:\*\*'; then
-        ag_campaign=$(echo "$line" | grep -oP '"[^"]+"' | head -1 | tr -d '"')
+      if [[ "$line" == '- **Campaign:**'* ]]; then
+        ag_campaign=$(_first_quoted_value "$line")
       fi
-      if echo "$line" | grep -qP '^\- \*\*Current status:\*\*'; then
+      if [[ "$line" == '- **Current status:**'* ]]; then
         ag_status=$(echo "$line" | sed 's/.*\*\*Current status:\*\* *//' | tr '[:lower:]' '[:upper:]')
       fi
-      if echo "$line" | grep -qP '^\- \*\*Problem:\*\*'; then
+      if [[ "$line" == '- **Problem:**'* ]]; then
         ag_reason=$(echo "$line" | sed 's/.*\*\*Problem:\*\* *//' | head -c 200)
       fi
     done <<< "$section_ag_pause"
@@ -430,7 +441,7 @@ parse_draft() {
   local all_actions
   all_actions=$(echo "$negatives" "$pauses" "$pause_sections" | jq -s '
     add
-    | unique_by(.type + "|" + .keyword + "|" + .campaign + "|" + (.adgroup // ""))
+    | unique_by(.type + "|" + .keyword + "|" + .match_type + "|" + .scope + "|" + .campaign + "|" + (.adgroup // ""))
     | to_entries
     | map(.value + {index: (.key + 1)})
   ')

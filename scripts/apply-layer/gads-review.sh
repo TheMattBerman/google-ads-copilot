@@ -134,10 +134,7 @@ review_draft() {
 
   # Extract confidence from the draft file
   local confidence
-  confidence=$(grep -oP '^## Confidence\n\K.*' "$draft_file" 2>/dev/null || echo "")
-  if [ -z "$confidence" ]; then
-    confidence=$(sed -n '/^## Confidence/{n;p;}' "$draft_file" 2>/dev/null | head -c 80)
-  fi
+  confidence=$(gads_heading_body_line "$draft_file" "## Confidence" | head -c 80)
 
   if [ -n "$confidence" ]; then
     echo -e "  ${CYAN}Confidence:${NC} ${confidence}"
@@ -146,7 +143,7 @@ review_draft() {
 
   # Extract dependencies
   local deps
-  deps=$(sed -n '/^## Dependencies/{n;p;}' "$draft_file" 2>/dev/null | head -c 120)
+  deps=$(gads_heading_body_line "$draft_file" "## Dependencies" | head -c 120)
   if [ -n "$deps" ]; then
     echo -e "  ${CYAN}Dependencies:${NC} ${deps}"
     echo ""
@@ -192,7 +189,8 @@ review_all() {
     [[ "$draft_name" == _* ]] && continue
 
     local status
-    status=$(grep -oP '^Status: \K.*' "$draft_file" 2>/dev/null || echo "unknown")
+    status=$(awk 'index($0, "Status: ") == 1 { print substr($0, 9); exit }' "$draft_file")
+    [ -z "$status" ] && status="unknown"
     if [ "$status" = "proposed" ] || [ "$status" = "approved" ]; then
       found=$((found + 1))
       review_draft "$draft_file"

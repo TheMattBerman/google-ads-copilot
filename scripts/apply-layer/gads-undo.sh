@@ -143,7 +143,7 @@ undo_single() {
 
   # Check age warning
   local applied_epoch now_epoch age_days
-  applied_epoch=$(date -d "$applied_at" +%s 2>/dev/null || echo 0)
+  applied_epoch=$(gads_epoch_from_iso "$applied_at")
   now_epoch=$(date +%s)
   age_days=$(( (now_epoch - applied_epoch) / 86400 ))
 
@@ -167,15 +167,26 @@ undo_single() {
 
   local result
   case "$reversal_action" in
-    REMOVE_NEGATIVE)
+    REMOVE_NEGATIVE_CAMPAIGN)
       result=$(mutate_remove_campaign_criterion "$account_id" "$resource_name")
+      ;;
+    REMOVE_NEGATIVE_ADGROUP)
+      result=$(mutate_remove_adgroup_criterion "$account_id" "$resource_name")
+      ;;
+    REMOVE_NEGATIVE)
+      if [[ "$resource_name" == *"/adGroupCriteria/"* ]]; then
+        result=$(mutate_remove_adgroup_criterion "$account_id" "$resource_name")
+      else
+        result=$(mutate_remove_campaign_criterion "$account_id" "$resource_name")
+      fi
       ;;
     ENABLE_KEYWORD)
       # Extract adgroup_id and criterion_id from resource name
       # Format: customers/{cid}/adGroupCriteria/{agId}~{criterionId}
       local ag_id crit_id
-      ag_id=$(echo "$resource_name" | grep -oP '\d+(?=~)' || echo "")
-      crit_id=$(echo "$resource_name" | grep -oP '(?<=~)\d+' || echo "")
+      ag_id="${resource_name##*/}"
+      ag_id="${ag_id%%~*}"
+      crit_id="${resource_name##*~}"
       if [ -n "$ag_id" ] && [ -n "$crit_id" ]; then
         result=$(mutate_enable_keyword "$account_id" "$ag_id" "$crit_id")
       else
@@ -184,7 +195,7 @@ undo_single() {
       ;;
     ENABLE_ADGROUP)
       local ag_id
-      ag_id=$(echo "$resource_name" | grep -oP '\d+$' || echo "")
+      ag_id="${resource_name##*/}"
       result=$(mutate_enable_adgroup "$account_id" "$ag_id")
       ;;
     *)

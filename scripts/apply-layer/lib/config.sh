@@ -22,3 +22,66 @@ _gaql_escape() {
   local input="$1"
   echo "${input//\'/\'\'}"
 }
+
+# Portable ISO-8601 timestamp helper.
+gads_now_iso() {
+  if date -Iseconds >/dev/null 2>&1; then
+    date -Iseconds
+  else
+    date +"%Y-%m-%dT%H:%M:%S%z" | sed -E 's/([0-9]{2})([0-9]{2})$/\1:\2/'
+  fi
+}
+
+# Parse an ISO-8601 timestamp to epoch seconds across GNU/BSD date.
+gads_epoch_from_iso() {
+  local timestamp="$1"
+  local bsd_timestamp
+
+  bsd_timestamp=$(printf '%s\n' "$timestamp" | sed -E 's/Z$/+0000/; s/([+-][0-9]{2}):([0-9]{2})$/\1\2/')
+
+  if date -d "$timestamp" +%s >/dev/null 2>&1; then
+    date -d "$timestamp" +%s
+    return 0
+  fi
+
+  if date -j -f "%Y-%m-%dT%H:%M:%S%z" "$bsd_timestamp" +%s >/dev/null 2>&1; then
+    date -j -f "%Y-%m-%dT%H:%M:%S%z" "$bsd_timestamp" +%s
+    return 0
+  fi
+
+  if date -j -f "%Y-%m-%dT%H:%M:%S" "$timestamp" +%s >/dev/null 2>&1; then
+    date -j -f "%Y-%m-%dT%H:%M:%S" "$timestamp" +%s
+    return 0
+  fi
+
+  echo 0
+}
+
+# Read the value of the first markdown bullet matching "- Key: Value".
+gads_markdown_field() {
+  local file="$1"
+  local label="$2"
+
+  awk -v label="$label" '
+    index($0, "- " label ":") == 1 {
+      value = substr($0, length(label) + 4)
+      sub(/^[[:space:]]+/, "", value)
+      print value
+      exit
+    }
+  ' "$file"
+}
+
+# Read the first non-empty line immediately after a markdown heading.
+gads_heading_body_line() {
+  local file="$1"
+  local heading="$2"
+
+  awk -v heading="$heading" '
+    $0 == heading { capture = 1; next }
+    capture && NF {
+      print
+      exit
+    }
+  ' "$file"
+}

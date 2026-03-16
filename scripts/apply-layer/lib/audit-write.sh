@@ -16,6 +16,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 PROJECT_ROOT="${SCRIPT_DIR}/../../.."
 AUDIT_DIR="${PROJECT_ROOT}/workspace/ads/audit-trail"
 LOG_FILE="${AUDIT_DIR}/_log.md"
@@ -77,7 +78,7 @@ init_apply_session() {
 **Draft:** $(basename "$draft_file")
 **Account:** ${customer_name} (${customer_id})
 **Actions planned:** ${action_count}
-**Started:** $(date -Iseconds)
+**Started:** $(gads_now_iso)
 
 ### Dry Run Displayed
 (Operator confirmed before execution)
@@ -128,7 +129,7 @@ finalize_apply_session() {
 ### Summary
 - **Succeeded:** ${succeeded}/${total}
 - **Failed:** ${failed}/${total}
-- **Completed:** $(date -Iseconds)
+- **Completed:** $(gads_now_iso)
 
 EOF
 
@@ -170,7 +171,7 @@ update_reversal_status() {
   local reversal_id="$1"
   local new_status="$2"  # "undone"
   local undone_at
-  undone_at=$(date -Iseconds)
+  undone_at=$(gads_now_iso)
 
   local updated
   updated=$(jq --arg id "$reversal_id" --arg status "$new_status" --arg at "$undone_at" \

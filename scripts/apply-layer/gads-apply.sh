@@ -32,6 +32,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
 # ═══════════════════════════════════════════════════════════
@@ -380,7 +381,11 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
       reversal_resource=""
       case "$action_type" in
         ADD_NEGATIVE)
-          reversal_action="REMOVE_NEGATIVE"
+          if [ "$(echo "$action" | jq -r '.scope')" = "AD_GROUP" ]; then
+            reversal_action="REMOVE_NEGATIVE_ADGROUP"
+          else
+            reversal_action="REMOVE_NEGATIVE_CAMPAIGN"
+          fi
           reversal_resource="$resource_name"
           ;;
         PAUSE_KEYWORD)
@@ -402,7 +407,7 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
         --arg campaignName "$campaign_name" \
         --arg campaignId "$campaign_id" \
         --arg accountId "$CUSTOMER_ID" \
-        --arg appliedAt "$(date -Iseconds)" \
+        --arg appliedAt "$(gads_now_iso)" \
         --arg draftSource "$(basename "$DRAFT_FILE")" \
         --arg reversalAction "$reversal_action" \
         --arg reversalResource "$reversal_resource" \
@@ -465,7 +470,7 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
   case "$action_type" in
     ADD_NEGATIVE)
       if [ "$(echo "$action" | jq -r '.scope')" = "AD_GROUP" ]; then
-        verify_result=$(verify_negative_adgroup_exists "$CUSTOMER_ID" "$adgroup_name" "$keyword" "$match_type")
+        verify_result=$(verify_negative_adgroup_exists "$CUSTOMER_ID" "$campaign_name" "$adgroup_name" "$keyword" "$match_type")
       else
         verify_result=$(verify_negative_exists "$CUSTOMER_ID" "$campaign_name" "$keyword" "$match_type")
       fi

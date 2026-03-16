@@ -96,7 +96,7 @@ mutate_add_negative_campaign() {
     local resource_name
     resource_name=$(echo "$result" | jq -r '.results[0].resourceName // empty')
     local criterion_id
-    criterion_id=$(echo "$resource_name" | grep -oP '[0-9]+$' || echo "")
+    criterion_id="${resource_name##*~}"
 
     jq -n \
       --arg resource_name "$resource_name" \
@@ -151,7 +151,7 @@ mutate_add_negative_adgroup() {
     local resource_name
     resource_name=$(echo "$result" | jq -r '.results[0].resourceName // empty')
     local criterion_id
-    criterion_id=$(echo "$resource_name" | grep -oP '[0-9]+$' || echo "")
+    criterion_id="${resource_name##*~}"
 
     jq -n \
       --arg resource_name "$resource_name" \

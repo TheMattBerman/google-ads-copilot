@@ -92,17 +92,20 @@ verify_negative_exists() {
 # ═══════════════════════════════════════════════════════════
 verify_negative_adgroup_exists() {
   local customer_id="$1"
-  local adgroup_name="$2"
-  local keyword_text="$3"
-  local match_type="$4"
+  local campaign_name="$2"
+  local adgroup_name="$3"
+  local keyword_text="$4"
+  local match_type="$5"
 
   match_type=$(echo "$match_type" | tr '[:lower:]' '[:upper:]')
 
-  local safe_adgroup safe_keyword
+  local safe_campaign safe_adgroup safe_keyword
+  safe_campaign=$(_gaql_escape "$campaign_name")
   safe_adgroup=$(_gaql_escape "$adgroup_name")
   safe_keyword=$(_gaql_escape "$keyword_text")
 
   local query="SELECT
+    campaign.name,
     ad_group.name,
     ad_group_criterion.keyword.text,
     ad_group_criterion.keyword.match_type,
@@ -110,6 +113,7 @@ verify_negative_adgroup_exists() {
   FROM ad_group_criterion
   WHERE ad_group_criterion.negative = TRUE
     AND ad_group_criterion.type = 'KEYWORD'
+    AND campaign.name = '${safe_campaign}'
     AND ad_group.name = '${safe_adgroup}'
     AND ad_group_criterion.keyword.text = '${safe_keyword}'
     AND ad_group_criterion.keyword.match_type = '${match_type}'"

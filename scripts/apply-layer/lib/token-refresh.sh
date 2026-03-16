@@ -88,7 +88,7 @@ _refresh_token() {
   jq -n \
     --arg token "$access_token" \
     --argjson expires_at "$expires_at" \
-    --arg refreshed_at "$(date -Iseconds)" \
+    --arg refreshed_at "$(gads_now_iso)" \
     '{access_token: $token, expires_at: $expires_at, refreshed_at: $refreshed_at}' \
     > "$TOKEN_CACHE"
 
