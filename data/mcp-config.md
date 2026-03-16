@@ -48,6 +48,15 @@ gcloud auth application-default login \
 
 Save the credentials path printed after auth completes.
 
+For local testing with this repo, copy the committed templates and fill in your real values:
+
+```bash
+cp data/google-ads-adc-authorized-user.template.json data/google-ads-adc-authorized-user.json
+cp data/google-ads-mcp.test.env.example.sh data/google-ads-mcp.test.env.sh
+```
+
+These local files are intentionally gitignored and must not be committed.
+
 ### 4. Install pipx
 ```bash
 # If not already installed

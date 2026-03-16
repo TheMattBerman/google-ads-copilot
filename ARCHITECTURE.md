@@ -283,7 +283,7 @@ google-ads-copilot/
 ├── README.md                       # Package overview
 ├── ARCHITECTURE.md                 # This document
 ├── CLAUDE.md                       # Project notes
-├── README-OPENCLAW.md              # OpenClaw integration notes
+├── data/mcp-config.md              # Public MCP/OpenClaw integration notes
 ├── CHANGELOG.md
 ├── LICENSE
 ├── install.sh

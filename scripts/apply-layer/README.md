@@ -41,14 +41,18 @@ from approved drafts to real Google Ads API mutations.
 
 - `jq` — JSON processing
 - `curl` — API calls
-- OAuth2 credentials in `data/google-ads-adc-authorized-user.json`
+- OAuth2 credentials saved to a local file based on `data/google-ads-adc-authorized-user.template.json`
 - Developer token in env: `GOOGLE_ADS_DEVELOPER_TOKEN`
 - Account configured in `workspace/ads/account.md`
 
 ### Quick Start
 
 ```bash
-# Source environment
+# Create local credential/env files from the public templates
+cp data/google-ads-adc-authorized-user.template.json data/google-ads-adc-authorized-user.json
+cp data/google-ads-mcp.test.env.example.sh data/google-ads-mcp.test.env.sh
+
+# Fill in your real values, then source the local env file
 source data/google-ads-mcp.test.env.sh
 
 # Check operator status (what's connected, pending, applied)
@@ -100,6 +104,15 @@ The API version is centralized in `lib/config.sh`. To upgrade, change it once th
 4. **Atomic logging** — audit trail written per-action, not batched
 5. **Fail-forward** — one failed action doesn't block the rest
 6. **GAQL-safe** — all query string values escaped via `_gaql_escape()`
+
+### Public Repo Note
+
+The repo intentionally excludes any real credential or test files. Only safe templates are committed:
+
+- `data/google-ads-adc-authorized-user.template.json`
+- `data/google-ads-mcp.test.env.example.sh`
+
+Create your own local copies before running live tests.
 
 ### Supported Endpoints (v20)
 

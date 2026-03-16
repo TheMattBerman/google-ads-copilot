@@ -1,26 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CLAUDE_TARGET="${HOME}/.claude/skills"
-OPENCLAW_TARGET="${HOME}/clawd/skills/local/google-ads-copilot"
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLAUDE_TARGET="${CLAUDE_TARGET:-${HOME}/.claude/skills}"
 MODE="${1:-auto}"
+
+resolve_openclaw_target() {
+  if [ -n "${OPENCLAW_TARGET:-}" ]; then
+    echo "$OPENCLAW_TARGET"
+  elif [ -d "${HOME}/clawd/skills/local" ]; then
+    echo "${HOME}/clawd/skills/local/google-ads-copilot"
+  elif [ -d "${HOME}/openclaw/skills/local" ]; then
+    echo "${HOME}/openclaw/skills/local/google-ads-copilot"
+  else
+    echo "${HOME}/openclaw/skills/local/google-ads-copilot"
+  fi
+}
+
+OPENCLAW_TARGET="$(resolve_openclaw_target)"
 
 remove_claude_style() {
   echo "Removing Claude/OpenClaw-compatible skill dirs from $CLAUDE_TARGET"
   rm -rf "$CLAUDE_TARGET/google-ads"
-  for name in \
-    google-ads-daily \
-    google-ads-search-terms \
-    google-ads-intent-map \
-    google-ads-negatives \
-    google-ads-tracking \
-    google-ads-structure \
-    google-ads-rsas \
-    google-ads-budget \
-    google-ads-plan \
-    google-ads-audit \
-    google-ads-pmax
-  do
+  for skill_dir in "$ROOT_DIR"/skills/*; do
+    [ -d "$skill_dir" ] || continue
+    name="$(basename "$skill_dir")"
     rm -rf "$CLAUDE_TARGET/$name"
   done
 }
@@ -43,6 +47,7 @@ case "$MODE" in
     ;;
   *)
     echo "Usage: $0 [auto|claude|openclaw]"
+    echo "Override targets with CLAUDE_TARGET=... or OPENCLAW_TARGET=..."
     exit 1
     ;;
 esac

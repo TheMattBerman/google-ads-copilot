@@ -17,7 +17,7 @@ argument-hint: "[draft-file] | review [draft-file|--all] | status | undo [action
 > Keyword pauses and ad group pauses fully scaffolded and hardened.
 > CLI scripts at `scripts/apply-layer/`.
 > Smoke test: `scripts/apply-layer/gads-smoke-test.sh <customer_id>`
-> See `APPLY-LAYER.md` for design and `APPLY-IMPLEMENTATION.md` for implementation notes.
+> See `APPLY-LAYER.md` for design details and `scripts/apply-layer/README.md` for the public CLI implementation guide.
 > See `OPERATOR-PLAYBOOK.md` for the full operator workflow loop.
 
 Read first:

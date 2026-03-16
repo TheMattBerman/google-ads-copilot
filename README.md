@@ -39,7 +39,7 @@ Hook up the MCP server with OAuth + developer token and the agent pulls live dat
 
 You get: live account data, automatic account discovery, date-range fallback for sparse accounts, cross-referencing search terms against targeted keywords, and health detection out of the box.
 
-**Setup:** `./install.sh auto` → `/google-ads connect setup` → you're live. See `data/mcp-config.md` for details.
+**Setup:** `./install.sh auto` → `/google-ads connect setup` → you're live. See `data/mcp-config.md` for details. If your host uses a non-default skills path, override it with `CLAUDE_TARGET=...` or `OPENCLAW_TARGET=...`.
 
 ### Export Mode (zero setup)
 Paste a CSV from Google Ads. The analytical engine is the same — you just feed it manually. Good for one-off audits or accounts where you don't have API access yet.
@@ -112,10 +112,16 @@ Google Ads Copilot starts from search intent — what people typed, what they me
 ### Full Setup (connected mode)
 1. Configure the MCP server: [data/mcp-config.md](data/mcp-config.md)
 2. `./install.sh auto`
-3. `./scripts/test-mcp.sh` to verify connectivity
-4. `/google-ads connect setup` → discovers your accounts, picks one, writes workspace
-5. `/google-ads daily` or `/google-ads audit` → live data flows automatically
-6. Review drafts → approve → apply → verify
+3. Create local credential/env files from the committed templates:
+   `cp data/google-ads-adc-authorized-user.template.json data/google-ads-adc-authorized-user.json`
+   `cp data/google-ads-mcp.test.env.example.sh data/google-ads-mcp.test.env.sh`
+4. Fill in your real values, then `source data/google-ads-mcp.test.env.sh`
+5. `./scripts/test-mcp.sh` to verify connectivity
+6. `/google-ads connect setup` → discovers your accounts, picks one, writes workspace
+7. `/google-ads daily` or `/google-ads audit` → live data flows automatically
+8. Review drafts → approve → apply → verify
+
+The repo does not ship any real credentials or live test files. Only templates are committed.
 
 **See [DEMO-WORKFLOW.md](DEMO-WORKFLOW.md) for a guided walkthrough of the full cycle.**
 

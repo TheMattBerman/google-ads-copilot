@@ -2,9 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CLAUDE_TARGET="${HOME}/.claude/skills"
-OPENCLAW_TARGET="${HOME}/clawd/skills/local/google-ads-copilot"
+CLAUDE_TARGET="${CLAUDE_TARGET:-${HOME}/.claude/skills}"
 MODE="${1:-auto}"
+
+resolve_openclaw_target() {
+  if [ -n "${OPENCLAW_TARGET:-}" ]; then
+    echo "$OPENCLAW_TARGET"
+  elif [ -d "${HOME}/clawd/skills/local" ]; then
+    echo "${HOME}/clawd/skills/local/google-ads-copilot"
+  elif [ -d "${HOME}/openclaw/skills/local" ]; then
+    echo "${HOME}/openclaw/skills/local/google-ads-copilot"
+  else
+    echo "${HOME}/openclaw/skills/local/google-ads-copilot"
+  fi
+}
+
+OPENCLAW_TARGET="$(resolve_openclaw_target)"
 
 copy_tree() {
   local src="$1"
@@ -69,6 +82,7 @@ case "$MODE" in
     ;;
   *)
     echo "Usage: $0 [auto|claude|openclaw]"
+    echo "Override targets with CLAUDE_TARGET=... or OPENCLAW_TARGET=..."
     exit 1
     ;;
 esac
