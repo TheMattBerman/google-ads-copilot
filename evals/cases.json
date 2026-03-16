@@ -1,0 +1,120 @@
+[
+  {
+    "id": "buyer-intent-b2b-demo",
+    "category": "buyer-intent",
+    "description": "Demo/pricing style query should be recognized as strong commercial intent.",
+    "input": "crm software demo pricing for law firms",
+    "expected": {
+      "intent_class": "buyer",
+      "action": "keep_or_isolate"
+    }
+  },
+  {
+    "id": "research-intent-what-is",
+    "category": "research-intent",
+    "description": "Educational query should not be treated like BOF buyer intent.",
+    "input": "what is crm software",
+    "expected": {
+      "intent_class": "research",
+      "action": "exclude_or_separate"
+    }
+  },
+  {
+    "id": "job-seeker-negative",
+    "category": "negative-risk",
+    "description": "Job-seeker query should be flagged as exclusion candidate.",
+    "input": "marketing agency jobs near me",
+    "expected": {
+      "intent_class": "job-seeker",
+      "action": "exclude"
+    }
+  },
+  {
+    "id": "competitor-comparison",
+    "category": "competitor-isolate",
+    "description": "Competitor comparison query should be isolated, not mixed into generic traffic.",
+    "input": "hubspot alternatives pricing",
+    "expected": {
+      "intent_class": "competitor_or_comparison",
+      "action": "isolate"
+    }
+  },
+  {
+    "id": "support-query-exclude",
+    "category": "negative-risk",
+    "description": "Support/navigation query should usually be excluded from acquisition campaigns.",
+    "input": "acme crm login support",
+    "expected": {
+      "intent_class": "support",
+      "action": "exclude"
+    }
+  },
+  {
+    "id": "mixed-intent-pain-query",
+    "category": "buyer-intent",
+    "description": "Pain-led query can still be commercial and should not be auto-excluded.",
+    "input": "reduce sales followup chaos for small law firm",
+    "expected": {
+      "intent_class": "buyer_or_mixed",
+      "action": "watch_or_isolate"
+    }
+  },
+  {
+    "id": "freebie-risk-freemium",
+    "category": "negative-risk",
+    "description": "Free-intent should not be auto-blocked when the offer may have a freemium entry point.",
+    "input": "free crm for small law firms",
+    "expected": {
+      "intent_class": "freebie",
+      "action": "review_carefully"
+    }
+  },
+  {
+    "id": "brand-vs-nonbrand-contamination",
+    "category": "structure-split",
+    "description": "Branded demand should be treated separately from non-brand for cleaner performance interpretation.",
+    "input": "Campaign contains both brand name queries and generic category terms in same bucket",
+    "expected": {
+      "structure_action": "split",
+      "reason": "brand_nonbrand_mixed"
+    }
+  },
+  {
+    "id": "tracking-duplicate-risk",
+    "category": "tracking-broken",
+    "description": "Duplicate conversion setup should lower tracking confidence.",
+    "input": "GA4 import and native Google Ads tag both count the same lead form as primary conversion",
+    "expected": {
+      "tracking_confidence": "low",
+      "issue": "duplicate_counting"
+    }
+  },
+  {
+    "id": "tracking-micro-conversion-pollution",
+    "category": "tracking-broken",
+    "description": "Micro-conversions set as primary should be flagged as poor optimization input.",
+    "input": "Add to cart and page scroll are set as primary conversions for bidding",
+    "expected": {
+      "tracking_confidence": "low_or_medium",
+      "issue": "micro_conversion_pollution"
+    }
+  },
+  {
+    "id": "budget-fix-before-scale",
+    "category": "budget-decision",
+    "description": "Noisy generic traffic should not be scaled just because spend is available.",
+    "input": "Generic campaign has rising spend, weak conversion quality, and mixed educational/search intent",
+    "expected": {
+      "budget_action": "fix_before_scaling"
+    }
+  },
+  {
+    "id": "rsa-use-buyer-language",
+    "category": "rsa-direction",
+    "description": "RSA direction should use real buyer language from query patterns.",
+    "input": "Top converting modifiers are demo, pricing, and law firm crm",
+    "expected": {
+      "rsa_direction": "use_query_language"
+    }
+  }
+]

@@ -1,0 +1,5 @@
+{
+  "version": "1.0",
+  "description": "Registry of all applied actions and their reversal instructions.",
+  "reversals": []
+}

@@ -1,0 +1,17 @@
+{
+  "account": "Acme CRM",
+  "industry": "B2B SaaS",
+  "primary_kpi": "booked demos",
+  "notes": [
+    "Brand and non-brand queries currently share the same generic search campaign",
+    "A few comparison queries are converting better than the generic bucket",
+    "GA4 import and native Google Ads tag may both count the same demo conversion"
+  ],
+  "search_terms": [
+    {"query": "crm software demo pricing for law firms", "clicks": 24, "conversions": 5, "cost": 320},
+    {"query": "what is crm software", "clicks": 31, "conversions": 0, "cost": 141},
+    {"query": "hubspot alternatives pricing", "clicks": 18, "conversions": 3, "cost": 210},
+    {"query": "acme crm login support", "clicks": 12, "conversions": 0, "cost": 44},
+    {"query": "marketing agency jobs near me", "clicks": 9, "conversions": 0, "cost": 29}
+  ]
+}

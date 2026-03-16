@@ -1,0 +1,17 @@
+{
+  "account": "Northshore Legal Marketing",
+  "industry": "Local service / legal marketing",
+  "primary_kpi": "qualified leads",
+  "notes": [
+    "PMax looks efficient but may be absorbing branded demand",
+    "Educational modifiers appear mixed into the same bucket as bottom-funnel searches",
+    "Primary conversions include add-to-cart style micro events"
+  ],
+  "search_terms": [
+    {"query": "best legal marketing agency pricing", "clicks": 17, "conversions": 4, "cost": 410},
+    {"query": "legal marketing agency jobs", "clicks": 11, "conversions": 0, "cost": 61},
+    {"query": "what is legal marketing", "clicks": 26, "conversions": 0, "cost": 120},
+    {"query": "northshore legal marketing", "clicks": 35, "conversions": 6, "cost": 73},
+    {"query": "legal marketing alternatives", "clicks": 13, "conversions": 2, "cost": 155}
+  ]
+}

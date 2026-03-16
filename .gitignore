@@ -1,0 +1,38 @@
+# Credentials & secrets — NEVER commit
+data/google-ads-adc-authorized-user.json
+data/google-ads-mcp.test.env.sh
+data/google-ads-mcp.openclaw.patch-example.json
+data/mcporter.google-ads-mcp.patch.json
+data/google-ads-oauth-state.json
+*.env
+*.env.local
+.env.*
+
+# Live workspace data (contains real account information)
+workspace/
+
+# Internal-only artifacts (real client data)
+examples/internal/
+reports/
+
+# Internal dev notes (not for public distribution)
+CLAUDE.md
+MILESTONES.md
+NEXT-IMPROVEMENTS.md
+README-OPENCLAW.md
+APPLY-IMPLEMENTATION.md
+.claude-plugin/
+
+# Token caches
+/tmp/gads-copilot-token.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
