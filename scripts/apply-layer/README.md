@@ -9,7 +9,10 @@ Full write cycle proven on a live account.
 These scripts implement the Google Ads Copilot apply layer: the safe-write path
 from approved drafts to real Google Ads API mutations.
 
-**v1 scope:** Add negative keywords + pause keywords/ad groups.
+**v1 scope (default):** Add negative keywords + pause keywords/ad groups.
+
+**v2 scope (budget):** Set campaign daily budgets with hard guardrails (max % change, cooldowns, tracking gate, budget-neutral default).
+Budget actions require an `## Apply Manifest` JSON block (see `drafts/ACTION-MANIFEST.md`).
 
 ### Flow
 
@@ -29,7 +32,7 @@ from approved drafts to real Google Ads API mutations.
 | `gads-review.sh` | Review a draft without applying — action breakdown + risk |
 | `gads-status.sh` | Operator state overview — connection, drafts, reversals |
 | `gads-auth.sh` | Get/refresh OAuth2 access token, test API connectivity |
-| `gads-smoke-test.sh` | End-to-end write cycle test (add→verify→remove→verify) |
+| `gads-smoke-test.sh` | End-to-end write cycle test (`negative` or `budget` mode) |
 | `lib/config.sh` | Shared config: API version, base URL, GAQL escaping helpers |
 | `lib/parse-draft.sh` | Extract structured actions from draft markdown (negatives + pauses) |
 | `lib/api-mutate.sh` | Execute a single Google Ads API mutation |
@@ -59,7 +62,8 @@ source data/google-ads-mcp.test.env.sh
 ./scripts/apply-layer/gads-status.sh
 
 # Run smoke test (proves write cycle works)
-./scripts/apply-layer/gads-smoke-test.sh <YOUR_CID>
+./scripts/apply-layer/gads-smoke-test.sh negative <YOUR_CID>
+./scripts/apply-layer/gads-smoke-test.sh budget <YOUR_CID> [campaign_id]
 
 # Check auth
 ./scripts/apply-layer/gads-auth.sh
@@ -104,6 +108,7 @@ The API version is centralized in `lib/config.sh`. To upgrade, change it once th
 4. **Atomic logging** — audit trail written per-action, not batched
 5. **Fail-forward** — one failed action doesn't block the rest
 6. **GAQL-safe** — all query string values escaped via `_gaql_escape()`
+7. **Manifest-first for new writes** — budget writes come from `## Apply Manifest`, with legacy markdown parsing kept for v1 draft types
 
 ### Public Repo Note
 

@@ -93,16 +93,19 @@ Account: [Customer ID / Name]
 ---
 
 ## Dependencies
-- [e.g., "Apply negatives from 2026-03-15-negatives.md first — clean up search term waste before pausing structural entities"]
+- [e.g., "Apply negatives from 2026-03-15-acme-negatives.md first — clean up search term waste before pausing structural entities"]
 - [Or: "None — these pauses are independent"]
 
 ## Confidence
 [High / Medium / Low] — [reasoning]
 
 ## Review
-- [ ] Reviewed by operator
-- [ ] Approved for implementation
-- Reviewed on: ____
-- Applied on: ____
-- Reversal IDs: ____
-- Notes: ____
+- [ ] Evidence checked
+- [ ] Collateral risk checked
+- [ ] Dependencies checked
+- **Decision:** approve | defer | reject
+- **Decision reason:** ____
+- **Reviewed by:** ____
+- **Reviewed on:** ____
+- **Applied on:** ____
+- **Notes:** ____

@@ -115,7 +115,7 @@ See `data/export-formats.md` for recommended format.
 **Trigger:** Two or more distinct intent classes are sharing a single campaign or ad group, AND the performance gap between them is significant (e.g., 2x+ CPA difference, or one class converts and the other doesn't).
 
 Create a draft using `drafts/templates/structure-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-structure.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-structure.md`
 - Specify exactly which intent classes to separate, which campaigns/ad groups to split
 - Include keyword lists or patterns that should route to each new bucket
 - Update `workspace/ads/drafts/_index.md`

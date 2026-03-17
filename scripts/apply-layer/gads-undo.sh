@@ -92,7 +92,7 @@ if $LIST_ONLY; then
     printf "%-10s %-18s %-25s %-12s %-25s\n" \
       "$(echo "$r" | jq -r '.id')" \
       "$(echo "$r" | jq -r '.action')" \
-      "$(echo "$r" | jq -r '.keyword')" \
+      "$(echo "$r" | jq -r 'if (.keyword // "") != "" and .keyword != "-" then .keyword else (.campaignName // "-") end')" \
       "$(echo "$r" | jq -r '.matchType')" \
       "$(echo "$r" | jq -r '.draftSource')"
   done
@@ -121,7 +121,7 @@ undo_single() {
     exit 1
   fi
 
-  local action keyword match_type campaign account_id reversal_action resource_name applied_at
+  local action keyword match_type campaign account_id reversal_action resource_name applied_at before_micros after_micros
   action=$(echo "$record" | jq -r '.action')
   keyword=$(echo "$record" | jq -r '.keyword')
   match_type=$(echo "$record" | jq -r '.matchType')
@@ -130,6 +130,8 @@ undo_single() {
   reversal_action=$(echo "$record" | jq -r '.reversalAction')
   resource_name=$(echo "$record" | jq -r '.reversalResourceName')
   applied_at=$(echo "$record" | jq -r '.appliedAt')
+  before_micros=$(echo "$record" | jq -r '.beforeMicros // empty')
+  after_micros=$(echo "$record" | jq -r '.afterMicros // empty')
 
   echo -e "${BOLD}Undo: ${reversal_id}${NC}"
   echo ""
@@ -139,6 +141,9 @@ undo_single() {
   echo "  Applied at:      ${applied_at}"
   echo "  Reversal:        ${reversal_action}"
   echo "  Resource:        ${resource_name}"
+  if [ -n "$before_micros" ] && [ -n "$after_micros" ] && [ "$before_micros" != "0" ] && [ "$after_micros" != "0" ]; then
+    echo "  Budget (micros): ${after_micros} -> ${before_micros}"
+  fi
   echo ""
 
   # Check age warning
@@ -197,6 +202,13 @@ undo_single() {
       local ag_id
       ag_id="${resource_name##*/}"
       result=$(mutate_enable_adgroup "$account_id" "$ag_id")
+      ;;
+    RESTORE_CAMPAIGN_DAILY_BUDGET)
+      if [ -n "$before_micros" ] && [ "$before_micros" != "0" ]; then
+        result=$(mutate_set_campaign_budget_micros "$account_id" "$resource_name" "$before_micros")
+      else
+        result='{"success": false, "error": "Missing beforeMicros for budget reversal"}'
+      fi
       ;;
     *)
       result='{"success": false, "error": "Unknown reversal action: '"$reversal_action"'"}'

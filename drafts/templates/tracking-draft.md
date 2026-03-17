@@ -37,8 +37,12 @@ Account: [Customer ID / Name]
 [High / Medium / Low] — [reasoning]
 
 ## Review
-- [ ] Reviewed by operator
-- [ ] Approved for implementation
-- Reviewed on: ____
-- Applied on: ____
-- Notes: ____
+- [ ] Evidence checked
+- [ ] Collateral risk checked
+- [ ] Dependencies checked
+- **Decision:** approve | defer | reject
+- **Decision reason:** ____
+- **Reviewed by:** ____
+- **Reviewed on:** ____
+- **Applied on:** ____
+- **Notes:** ____

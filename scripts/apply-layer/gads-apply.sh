@@ -40,18 +40,21 @@ NC='\033[0m'
 # ═══════════════════════════════════════════════════════════
 DRY_RUN_ONLY=false
 PARSE_ONLY=false
+FORCE=false
 DRAFT_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run)    DRY_RUN_ONLY=true; shift ;;
     --parse-only) PARSE_ONLY=true; shift ;;
+    --force)      FORCE=true; shift ;;
     -h|--help)
       echo "Usage: gads-apply.sh [--dry-run|--parse-only] <draft-file>"
       echo ""
       echo "Options:"
       echo "  --dry-run      Show what would change without executing"
       echo "  --parse-only   Parse the draft to JSON and exit"
+      echo "  --force        Override certain safety blocks (v2: budget cooldown only)"
       echo ""
       echo "The draft file should be a markdown file from workspace/ads/drafts/"
       echo ""
@@ -93,6 +96,9 @@ CUSTOMER_ID=$(echo "$PARSED" | jq -r '.customer_id')
 CUSTOMER_NAME=$(echo "$PARSED" | jq -r '.customer_name')
 ACTION_COUNT=$(echo "$PARSED" | jq -r '.action_count')
 DRAFT_STATUS=$(echo "$PARSED" | jq -r '.status')
+BUDGET_POLICY=$(echo "$PARSED" | jq -c '.meta.budget_policy // {}')
+ALLOW_NET_INCREASE=$(echo "$BUDGET_POLICY" | jq -r '.allow_net_increase // false')
+MAX_NET_INCREASE_PCT=$(echo "$BUDGET_POLICY" | jq -r '.max_net_increase_pct // 10')
 
 echo "  Account:  ${CUSTOMER_NAME} (${CUSTOMER_ID})"
 echo "  Actions:  ${ACTION_COUNT}"
@@ -109,11 +115,115 @@ if $PARSE_ONLY; then
   exit 0
 fi
 
+WORKSPACE_DIR="${PROJECT_ROOT}/workspace/ads"
+ACCOUNT_FILE="${WORKSPACE_DIR}/account.md"
+DRAFT_INDEX_FILE="${WORKSPACE_DIR}/drafts/_index.md"
+REVERSAL_REGISTRY_FILE="${WORKSPACE_DIR}/audit-trail/reversal-registry.json"
+
+_lower() { tr '[:upper:]' '[:lower:]'; }
+
+_abs_int() {
+  local n="$1"
+  if [ "$n" -lt 0 ]; then
+    echo $(( -1 * n ))
+  else
+    echo "$n"
+  fi
+}
+
+_pct_change_int() {
+  # Returns a signed integer percent change, rounded to nearest int.
+  local current="$1"
+  local proposed="$2"
+  awk -v c="$current" -v p="$proposed" 'BEGIN {
+    if (c <= 0) { print 0; exit }
+    pct = ((p - c) / c) * 100.0
+    if (pct >= 0) { print int(pct + 0.5) } else { print int(pct - 0.5) }
+  }'
+}
+
+_last_budget_change_epoch_for_campaign() {
+  local campaign_name="$1"
+  if [ ! -f "$REVERSAL_REGISTRY_FILE" ]; then
+    echo ""
+    return 0
+  fi
+
+  local last_iso
+  last_iso=$(jq -r --arg c "$campaign_name" '
+    [.reversals[]? | select(.action == "SET_CAMPAIGN_DAILY_BUDGET" and .campaignName == $c) | .appliedAt]
+    | sort
+    | last // empty
+  ' "$REVERSAL_REGISTRY_FILE" 2>/dev/null)
+
+  if [ -z "$last_iso" ]; then
+    echo ""
+    return 0
+  fi
+
+  gads_epoch_from_iso "$last_iso"
+}
+
+_tracking_confidence_ok_for_budgets() {
+  if [ ! -f "$ACCOUNT_FILE" ]; then
+    return 1
+  fi
+
+  local tc
+  tc=$(gads_markdown_field "$ACCOUNT_FILE" "Tracking confidence" 2>/dev/null || true)
+  tc=$(printf '%s' "$tc" | _lower | tr -d '[]' | awk '{print $1}')
+
+  case "$tc" in
+    high|medium) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_has_pending_tracking_drafts() {
+  if [ ! -f "$DRAFT_INDEX_FILE" ]; then
+    # Fail closed for budget actions: if we can't determine pending tracking work, block.
+    return 0
+  fi
+
+  # Any "tracking" draft in Proposed or Approved blocks budget applies.
+  awk '
+    $0 == "## Proposed" { sec = "proposed"; next }
+    $0 == "## Approved" { sec = "approved"; next }
+    $0 ~ /^## / { sec = ""; next }
+    (sec == "proposed" || sec == "approved") && tolower($0) ~ /tracking/ { found = 1 }
+    END { exit(found ? 0 : 1) }
+  ' "$DRAFT_INDEX_FILE"
+}
+
 # ═══════════════════════════════════════════════════════════
 # Step 2: Validate & resolve IDs
 # ═══════════════════════════════════════════════════════════
 echo ""
 echo -e "${BLUE}Step 2: Validating and resolving resource IDs...${NC}"
+
+# Budget gating (fail closed unless dry-run).
+BUDGET_COUNT=$(echo "$PARSED" | jq '[.actions[] | select(.type == "SET_CAMPAIGN_DAILY_BUDGET")] | length')
+if [ "$BUDGET_COUNT" -gt 0 ]; then
+  if ! _tracking_confidence_ok_for_budgets; then
+    msg="Budget actions blocked: tracking confidence must be Medium/High in workspace/ads/account.md"
+    if $DRY_RUN_ONLY; then
+      echo -e "${YELLOW}⚠️  ${msg} (dry-run continues)${NC}"
+    else
+      echo -e "${RED}ERROR: ${msg}${NC}"
+      exit 1
+    fi
+  fi
+
+  if _has_pending_tracking_drafts; then
+    msg="Budget actions blocked: pending tracking draft(s) exist in workspace/ads/drafts/_index.md"
+    if $DRY_RUN_ONLY; then
+      echo -e "${YELLOW}⚠️  ${msg} (dry-run continues)${NC}"
+    else
+      echo -e "${RED}ERROR: ${msg}${NC}"
+      exit 1
+    fi
+  fi
+fi
 
 # Get access token (validates credentials)
 ACCESS_TOKEN=$(get_access_token)
@@ -127,10 +237,11 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
   action=$(echo "$PARSED" | jq ".actions[$i]")
   action_type=$(echo "$action" | jq -r '.type')
   campaign_name=$(echo "$action" | jq -r '.campaign')
-  keyword=$(echo "$action" | jq -r '.keyword')
-  match_type=$(echo "$action" | jq -r '.match_type')
+  keyword=$(echo "$action" | jq -r '.keyword // empty')
+  match_type=$(echo "$action" | jq -r '.match_type // empty')
   scope=$(echo "$action" | jq -r '.scope')
   adgroup_name=$(echo "$action" | jq -r '.adgroup // empty')
+  proposed_budget_micros=$(echo "$action" | jq -r '.proposed_daily_budget_micros // empty')
 
   # Resolve campaign ID
   campaign_id=$(lookup_campaign_id "$CUSTOMER_ID" "$campaign_name")
@@ -141,6 +252,88 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
   else
     action=$(echo "$action" | jq --arg cid "$campaign_id" '. + {campaign_id: $cid}')
     echo -e "  ✅ Campaign: \"${campaign_name}\" → ID ${campaign_id}"
+  fi
+
+  # Resolve campaign budget info + enforce budget guardrails
+  if [ "$action_type" = "SET_CAMPAIGN_DAILY_BUDGET" ]; then
+    if [ -z "$proposed_budget_micros" ] || [[ ! "$proposed_budget_micros" =~ ^[0-9]+$ ]]; then
+      echo -e "  ${RED}❌ Proposed budget micros missing/invalid for: \"${campaign_name}\"${NC}"
+      action=$(echo "$action" | jq '. + {valid: false, error: "Proposed budget micros missing/invalid"}')
+      VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+    else
+      budget_info=$(lookup_campaign_budget_info "$CUSTOMER_ID" "$campaign_name")
+      if [ -z "$budget_info" ]; then
+        echo -e "  ${RED}❌ Campaign budget not found: \"${campaign_name}\"${NC}"
+        action=$(echo "$action" | jq '. + {valid: false, error: "Campaign budget not found"}')
+        VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+      else
+        current_micros=$(echo "$budget_info" | jq -r '.current_micros')
+        budget_rn=$(echo "$budget_info" | jq -r '.budget_resource_name')
+        explicitly_shared=$(echo "$budget_info" | jq -r '.explicitly_shared // false')
+
+        if [ "$explicitly_shared" = "true" ]; then
+          echo -e "  ${RED}❌ Shared campaign budgets are out of scope: \"${campaign_name}\"${NC}"
+          action=$(echo "$action" | jq '. + {valid: false, error: "Shared campaign budget is out of scope"}')
+          VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+          RESOLVED_ACTIONS=$(echo "$RESOLVED_ACTIONS" | jq --argjson a "$action" '. + [$a]')
+          continue
+        fi
+
+        delta_micros=$((proposed_budget_micros - current_micros))
+        pct_change=$(_pct_change_int "$current_micros" "$proposed_budget_micros")
+
+        action=$(echo "$action" | jq \
+          --arg rn "$budget_rn" \
+          --argjson cur "$current_micros" \
+          --argjson prop "$proposed_budget_micros" \
+          --argjson delta "$delta_micros" \
+          --argjson pct "$pct_change" \
+          '. + {
+            campaign_budget_resource_name: $rn,
+            current_daily_budget_micros: $cur,
+            proposed_daily_budget_micros: $prop,
+            budget_delta_micros: $delta,
+            budget_pct_change: $pct
+          }')
+
+        max_pct=$(echo "$action" | jq -r '.guardrails.max_pct_change // 30')
+        cooldown_days=$(echo "$action" | jq -r '.guardrails.cooldown_days // 7')
+
+        pct_abs=$(_abs_int "$pct_change")
+        if [ "$pct_abs" -gt "$max_pct" ]; then
+          echo -e "  ${RED}❌ Budget change exceeds cap for \"${campaign_name}\": ${pct_change}% (cap ${max_pct}%)${NC}"
+          action=$(echo "$action" | jq --arg msg "Budget change exceeds cap (${max_pct}%)" '. + {valid: false, error: $msg}')
+          VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+        else
+          # No-op guardrail: require at least max(5% of current, 5 units) movement.
+          min_abs_pct=$(( (current_micros * 5 + 99) / 100 ))
+          min_abs_units=5000000
+          min_abs="$min_abs_pct"
+          if [ "$min_abs" -lt "$min_abs_units" ]; then
+            min_abs="$min_abs_units"
+          fi
+
+          delta_abs=$(_abs_int "$delta_micros")
+          if [ "$delta_abs" -lt "$min_abs" ]; then
+            echo -e "  ${YELLOW}⏭️  Budget change is too small (noop) for \"${campaign_name}\"${NC}"
+            action=$(echo "$action" | jq '. + {valid: false, error: "No-op budget change (below min delta)"}')
+            VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+          fi
+
+          # Cooldown guardrail: block repeated budget changes to same campaign.
+          last_epoch=$(_last_budget_change_epoch_for_campaign "$campaign_name")
+          if [ -n "$last_epoch" ]; then
+            now_epoch=$(date +%s)
+            age_days=$(( (now_epoch - last_epoch) / 86400 ))
+            if [ "$age_days" -lt "$cooldown_days" ] && ! $FORCE; then
+              echo -e "  ${RED}❌ Budget cooldown violation for \"${campaign_name}\": last change ${age_days}d ago (cooldown ${cooldown_days}d)${NC}"
+              action=$(echo "$action" | jq --arg msg "Budget cooldown violation (${cooldown_days}d)" '. + {valid: false, error: $msg}')
+              VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+            fi
+          fi
+        fi
+      fi
+    fi
   fi
 
   # Resolve ad group ID if needed
@@ -189,6 +382,16 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
     fi
   fi
 
+  case "$action_type" in
+    ADD_NEGATIVE|SET_CAMPAIGN_DAILY_BUDGET|PAUSE_KEYWORD|PAUSE_ADGROUP)
+      ;;
+    *)
+      echo -e "  ${RED}❌ Unsupported action type: \"${action_type}\"${NC}"
+      action=$(echo "$action" | jq --arg msg "Unsupported action type: ${action_type}" '. + {valid: false, error: $msg}')
+      VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
+      ;;
+  esac
+
   # Mark as valid if no errors added
   action=$(echo "$action" | jq 'if .valid == null then . + {valid: true} else . end')
 
@@ -202,6 +405,35 @@ echo "  Valid actions: ${VALID_COUNT}/${ACTION_COUNT}"
 if [ "$VALID_COUNT" -eq 0 ]; then
   echo -e "${RED}No valid actions. Cannot proceed.${NC}"
   exit 1
+fi
+
+# Budget policy guardrail (v2 default): stay budget-neutral unless the manifest
+# explicitly opts into a bounded net increase.
+VALID_BUDGET_COUNT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "SET_CAMPAIGN_DAILY_BUDGET")] | length')
+if [ "$VALID_BUDGET_COUNT" -gt 0 ]; then
+  SUM_CURRENT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "SET_CAMPAIGN_DAILY_BUDGET") | .current_daily_budget_micros] | add // 0')
+  SUM_PROPOSED=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "SET_CAMPAIGN_DAILY_BUDGET") | .proposed_daily_budget_micros] | add // 0')
+  NET_DELTA=$((SUM_PROPOSED - SUM_CURRENT))
+  if [ "$NET_DELTA" -ne 0 ]; then
+    if [ "$NET_DELTA" -gt 0 ] && [ "$ALLOW_NET_INCREASE" = "true" ]; then
+      NET_PCT=$(_pct_change_int "$SUM_CURRENT" "$SUM_PROPOSED")
+      if [ "$NET_PCT" -gt "$MAX_NET_INCREASE_PCT" ]; then
+        echo ""
+        echo -e "${RED}ERROR: Budget draft exceeds max allowed net increase.${NC}"
+        echo -e "${RED}  Sum current:  ${SUM_CURRENT} micros${NC}"
+        echo -e "${RED}  Sum proposed: ${SUM_PROPOSED} micros${NC}"
+        echo -e "${RED}  Net change:   +${NET_PCT}% (cap ${MAX_NET_INCREASE_PCT}%)${NC}"
+        exit 1
+      fi
+    else
+      echo ""
+      echo -e "${RED}ERROR: Budget draft is not budget-neutral (v2 default).${NC}"
+      echo -e "${RED}  Sum current:  ${SUM_CURRENT} micros${NC}"
+      echo -e "${RED}  Sum proposed: ${SUM_PROPOSED} micros${NC}"
+      echo -e "${RED}Add meta.budget_policy.allow_net_increase=true only when a bounded net increase is intentional.${NC}"
+      exit 1
+    fi
+  fi
 fi
 
 # ═══════════════════════════════════════════════════════════
@@ -228,6 +460,9 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
   match_type=$(echo "$action" | jq -r '.match_type')
   campaign=$(echo "$action" | jq -r '.campaign')
   adgroup=$(echo "$action" | jq -r '.adgroup // "-"')
+  current_budget=$(echo "$action" | jq -r '.current_daily_budget_micros // empty')
+  proposed_budget=$(echo "$action" | jq -r '.proposed_daily_budget_micros // empty')
+  budget_pct=$(echo "$action" | jq -r '.budget_pct_change // empty')
 
   display_type=""
   display_target=""
@@ -239,6 +474,12 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
       display_type="ADD NEG"
       display_target="Campaign: ${campaign}"
       display_detail="\"${keyword}\" [${match_type}]"
+      ;;
+    SET_CAMPAIGN_DAILY_BUDGET)
+      display_type="BUDGET"
+      display_target="Campaign: ${campaign}"
+      display_detail="${current_budget}->${proposed_budget} (${budget_pct}%)"
+      display_risk="Medium"
       ;;
     PAUSE_KEYWORD)
       display_type="PAUSE KW"
@@ -265,15 +506,29 @@ echo -e "${BOLD}Summary:${NC}"
 
 # Count by action type
 NEG_COUNT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "ADD_NEGATIVE")] | length')
+BDG_COUNT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "SET_CAMPAIGN_DAILY_BUDGET")] | length')
 PAUSE_KW_COUNT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "PAUSE_KEYWORD")] | length')
 PAUSE_AG_COUNT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "PAUSE_ADGROUP")] | length')
 SKIP_COUNT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == false)] | length')
 
 [ "$NEG_COUNT" -gt 0 ] && echo -e "  • ${NEG_COUNT} negative keyword addition(s)"
+[ "$BDG_COUNT" -gt 0 ] && echo -e "  • ${BDG_COUNT} budget change(s)"
 [ "$PAUSE_KW_COUNT" -gt 0 ] && echo -e "  • ${PAUSE_KW_COUNT} keyword pause(s)"
 [ "$PAUSE_AG_COUNT" -gt 0 ] && echo -e "  • ${PAUSE_AG_COUNT} ad group pause(s)"
 [ "$SKIP_COUNT" -gt 0 ] && echo -e "  • ${YELLOW}${SKIP_COUNT} skipped (validation errors)${NC}"
 echo -e "  • Reversibility: ${GREEN}All actions reversible${NC}"
+
+if [ "$BDG_COUNT" -gt 0 ]; then
+  SUM_CURRENT=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "SET_CAMPAIGN_DAILY_BUDGET") | .current_daily_budget_micros] | add // 0')
+  SUM_PROPOSED=$(echo "$RESOLVED_ACTIONS" | jq '[.[] | select(.valid == true and .type == "SET_CAMPAIGN_DAILY_BUDGET") | .proposed_daily_budget_micros] | add // 0')
+  NET_DELTA=$((SUM_PROPOSED - SUM_CURRENT))
+  echo -e "  • Net budget delta (micros): ${NET_DELTA}"
+  if [ "$ALLOW_NET_INCREASE" = "true" ]; then
+    echo -e "  • Budget policy: net increase allowed up to ${MAX_NET_INCREASE_PCT}%"
+  else
+    echo -e "  • Budget policy: budget-neutral only"
+  fi
+fi
 
 if [ "$VALIDATION_ERRORS" -gt 0 ]; then
   echo ""
@@ -298,15 +553,31 @@ fi
 # Step 4: Human confirmation
 # ═══════════════════════════════════════════════════════════
 echo ""
-echo -n "Type 'confirm' to proceed, or 'cancel' to abort: "
+if [ "$BDG_COUNT" -gt 0 ]; then
+  echo -n "Type 'confirm budgets' to proceed, or 'cancel' to abort: "
+else
+  echo -n "Type 'confirm' to proceed, or 'cancel' to abort: "
+fi
 read -r confirmation
 
-if [ "$confirmation" != "confirm" ]; then
-  echo -e "${YELLOW}Cancelled. No changes made.${NC}"
-  exit 0
+if [ "$BDG_COUNT" -gt 0 ]; then
+  if [ "$confirmation" != "confirm budgets" ]; then
+    echo -e "${YELLOW}Cancelled. No changes made.${NC}"
+    exit 0
+  fi
+else
+  if [ "$confirmation" != "confirm" ]; then
+    echo -e "${YELLOW}Cancelled. No changes made.${NC}"
+    exit 0
+  fi
 fi
 
 echo ""
+if [ "$BDG_COUNT" -gt 0 ] && $FORCE; then
+  echo -e "${YELLOW}⚠️  --force enabled (budget cooldown override may have been used).${NC}"
+  echo ""
+fi
+
 echo -e "${GREEN}Confirmed. Executing ${VALID_COUNT} actions...${NC}"
 
 # ═══════════════════════════════════════════════════════════
@@ -340,9 +611,17 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
   adgroup_name=$(echo "$action" | jq -r '.adgroup // empty')
   adgroup_id=$(echo "$action" | jq -r '.adgroup_id // empty')
   criterion_id=$(echo "$action" | jq -r '.criterion_id // empty')
+  budget_rn=$(echo "$action" | jq -r '.campaign_budget_resource_name // empty')
+  current_budget=$(echo "$action" | jq -r '.current_daily_budget_micros // empty')
+  proposed_budget=$(echo "$action" | jq -r '.proposed_daily_budget_micros // empty')
+  budget_pct=$(echo "$action" | jq -r '.budget_pct_change // empty')
   action_index=$(echo "$action" | jq -r '.index')
 
-  echo -n "  [${action_index}] ${action_type}: \"${keyword}\" ... "
+  if [ "$action_type" = "SET_CAMPAIGN_DAILY_BUDGET" ]; then
+    echo -n "  [${action_index}] ${action_type}: ${campaign_name} (${current_budget}->${proposed_budget}) ... "
+  else
+    echo -n "  [${action_index}] ${action_type}: \"${keyword}\" ... "
+  fi
 
   result=""
   resource_name=""
@@ -355,6 +634,9 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
       else
         result=$(mutate_add_negative_campaign "$CUSTOMER_ID" "$campaign_id" "$keyword" "$match_type")
       fi
+      ;;
+    SET_CAMPAIGN_DAILY_BUDGET)
+      result=$(mutate_set_campaign_budget_micros "$CUSTOMER_ID" "$budget_rn" "$proposed_budget")
       ;;
     PAUSE_KEYWORD)
       result=$(mutate_pause_keyword "$CUSTOMER_ID" "$adgroup_id" "$criterion_id")
@@ -388,6 +670,10 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
           fi
           reversal_resource="$resource_name"
           ;;
+        SET_CAMPAIGN_DAILY_BUDGET)
+          reversal_action="RESTORE_CAMPAIGN_DAILY_BUDGET"
+          reversal_resource="$budget_rn"
+          ;;
         PAUSE_KEYWORD)
           reversal_action="ENABLE_KEYWORD"
           reversal_resource="$resource_name"
@@ -397,6 +683,12 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
           reversal_resource="$resource_name"
           ;;
       esac
+
+      # For budgets, store before/after in reversal record; keep keyword/match fields stable for registry tooling.
+      if [ "$action_type" = "SET_CAMPAIGN_DAILY_BUDGET" ]; then
+        keyword="-"
+        match_type="N/A"
+      fi
 
       reversal_record=$(jq -n \
         --arg id "$reversal_id" \
@@ -412,6 +704,9 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
         --arg reversalAction "$reversal_action" \
         --arg reversalResource "$reversal_resource" \
         --arg resourceName "$resource_name" \
+        --arg budgetResourceName "$budget_rn" \
+        --argjson beforeMicros "${current_budget:-0}" \
+        --argjson afterMicros "${proposed_budget:-0}" \
         '{
           id: $id,
           action: $action,
@@ -427,18 +722,29 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
           reversalAction: $reversalAction,
           reversalResourceName: $reversalResource,
           resourceName: $resourceName,
+          budgetResourceName: (if $budgetResourceName == "" then null else $budgetResourceName end),
+          beforeMicros: $beforeMicros,
+          afterMicros: $afterMicros,
           status: "active",
           undoneAt: null
         }')
 
       add_reversal_record "$reversal_record"
-      log_action_result "$action_index" "$action_type" "$campaign_name" "\"$keyword\" [$match_type]" "✅ Applied" "$reversal_id" "$resource_name"
+      if [ "$action_type" = "SET_CAMPAIGN_DAILY_BUDGET" ]; then
+        log_action_result "$action_index" "$action_type" "$campaign_name" "${current_budget}->${proposed_budget} (${budget_pct}%)" "✅ Applied" "$reversal_id" "$budget_rn"
+      else
+        log_action_result "$action_index" "$action_type" "$campaign_name" "\"$keyword\" [$match_type]" "✅ Applied" "$reversal_id" "$resource_name"
+      fi
     fi
   else
     error=$(echo "$result" | jq -r '.error // "Unknown"')
     echo -e "${RED}❌ ${error}${NC}"
     FAILED=$((FAILED + 1))
-    log_action_result "$action_index" "$action_type" "$campaign_name" "\"$keyword\" [$match_type]" "❌ Failed: $error" "-"
+    if [ "$action_type" = "SET_CAMPAIGN_DAILY_BUDGET" ]; then
+      log_action_result "$action_index" "$action_type" "$campaign_name" "${current_budget}->${proposed_budget} (${budget_pct}%)" "❌ Failed: $error" "-"
+    else
+      log_action_result "$action_index" "$action_type" "$campaign_name" "\"$keyword\" [$match_type]" "❌ Failed: $error" "-"
+    fi
   fi
 
   # Rate limit: small delay between mutations
@@ -464,6 +770,7 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
   match_type=$(echo "$action" | jq -r '.match_type')
   campaign_name=$(echo "$action" | jq -r '.campaign')
   adgroup_name=$(echo "$action" | jq -r '.adgroup // empty')
+  proposed_budget=$(echo "$action" | jq -r '.proposed_daily_budget_micros // empty')
 
   verify_result=""
 
@@ -474,6 +781,9 @@ for i in $(seq 0 $((ACTION_COUNT - 1))); do
       else
         verify_result=$(verify_negative_exists "$CUSTOMER_ID" "$campaign_name" "$keyword" "$match_type")
       fi
+      ;;
+    SET_CAMPAIGN_DAILY_BUDGET)
+      verify_result=$(verify_campaign_budget_micros "$CUSTOMER_ID" "$campaign_name" "$proposed_budget")
       ;;
     PAUSE_KEYWORD)
       verify_result=$(verify_keyword_paused "$CUSTOMER_ID" "$campaign_name" "$adgroup_name" "$keyword")
@@ -512,12 +822,12 @@ echo "  └── Skipped:   $((ACTION_COUNT - VALID_COUNT)) (validation errors)
 echo ""
 echo -e "  ${BOLD}Audit Trail:${NC}"
 echo "  ├── Session:   ${_SESSION_FILE}"
-echo "  ├── Registry:  ${REGISTRY_FILE}"
+echo "  ├── Registry:  ${REVERSAL_REGISTRY_FILE}"
 echo "  └── Master:    workspace/ads/audit-trail/_log.md"
 echo ""
 
 # Show reversal IDs for this session
-FIRST_REV=$(jq -r '[.reversals[] | select(.status == "active")] | sort_by(.id) | last(.[].id) // empty' "$REGISTRY_FILE" 2>/dev/null)
+FIRST_REV=$(jq -r --arg d "$(basename "$DRAFT_FILE")" '[.reversals[]? | select(.status == "active" and .draftSource == $d) | .id] | first // empty' "$REVERSAL_REGISTRY_FILE" 2>/dev/null)
 if [ -n "$FIRST_REV" ]; then
   echo -e "  ${BOLD}Undo:${NC}"
   echo "  ├── Single:    gads-undo.sh <rev-ID>"

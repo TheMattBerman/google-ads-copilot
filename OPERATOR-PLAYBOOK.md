@@ -103,6 +103,8 @@ Currently selected: Acme Equipment Co. (1234567890)
 3. Dependencies between drafts are mapped
 4. A recommended apply order is produced
 
+**Note:** This updates `workspace/ads/drafts/_summary.md`, which is the current backlog snapshot. Audit runs that create multiple drafts should also leave behind `_batch-YYYY-MM-DD-[account-slug].md` as the point-in-time packet for that run.
+
 **What you see:**
 ```
 ## Draft Summary — 2026-03-15
@@ -140,7 +142,7 @@ Pending: 4 drafts | Quick-apply: 2 | Blocked: 1
 **What you see (dry run):**
 ```
 ═══════════════════════════════════════════════════════
- DRY RUN: negatives-draft.md
+ DRY RUN: 2026-03-15-acme-negatives.md
 ═══════════════════════════════════════════════════════
 
 Account: Acme Equipment Co. (CID: 1234567890)

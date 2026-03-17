@@ -223,6 +223,76 @@ verify_adgroup_paused() {
 }
 
 # ═══════════════════════════════════════════════════════════
+# LOOKUP: Resolve campaign name → campaign budget info
+# ═══════════════════════════════════════════════════════════
+# Returns JSON (or empty string if not found):
+# {"budget_resource_name":"customers/.../campaignBudgets/..","current_micros":12345678,"explicitly_shared":false}
+lookup_campaign_budget_info() {
+  local customer_id="$1"
+  local campaign_name="$2"
+
+  local safe_campaign
+  safe_campaign=$(_gaql_escape "$campaign_name")
+
+  local query="SELECT
+    campaign.name,
+    campaign_budget.resource_name,
+    campaign_budget.amount_micros,
+    campaign_budget.explicitly_shared
+  FROM campaign
+  WHERE campaign.name = '${safe_campaign}'
+    AND campaign.status != 'REMOVED'"
+
+  local result
+  result=$(_gaql_query "$customer_id" "$query")
+
+  echo "$result" | jq -c '
+    [.[].results[]? | {
+      budget_resource_name: (.campaignBudget.resourceName // empty),
+      current_micros: ((.campaignBudget.amountMicros // 0) | tonumber),
+      explicitly_shared: (.campaignBudget.explicitlyShared // false)
+    }]
+    | map(select(.budget_resource_name != "" and .current_micros > 0))
+    | first // empty
+  ' 2>/dev/null
+}
+
+# ═══════════════════════════════════════════════════════════
+# VERIFY: Campaign budget amount_micros matches expected
+# ═══════════════════════════════════════════════════════════
+verify_campaign_budget_micros() {
+  local customer_id="$1"
+  local campaign_name="$2"
+  local expected_micros="$3"
+
+  local info
+  info=$(lookup_campaign_budget_info "$customer_id" "$campaign_name")
+
+  if [ -z "$info" ]; then
+    jq -n \
+      --arg campaign "$campaign_name" \
+      '{verified: false, detail: ("Campaign budget not found for campaign \"\($campaign)\"")}'
+    return 0
+  fi
+
+  local got
+  got=$(echo "$info" | jq -r '.current_micros')
+
+  if [ "$got" = "$expected_micros" ]; then
+    jq -n \
+      --arg campaign "$campaign_name" \
+      --arg micros "$expected_micros" \
+      '{verified: true, detail: ("Budget confirmed for campaign \"\($campaign)\": \($micros) micros")}'
+  else
+    jq -n \
+      --arg campaign "$campaign_name" \
+      --arg exp "$expected_micros" \
+      --arg got "$got" \
+      '{verified: false, detail: ("Budget mismatch for campaign \"\($campaign)\": got=\($got) expected=\($exp) micros")}'
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════
 # LOOKUP: Resolve campaign name → campaign ID
 # ═══════════════════════════════════════════════════════════
 lookup_campaign_id() {

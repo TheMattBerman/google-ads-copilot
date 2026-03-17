@@ -4,8 +4,8 @@
 Last updated: 2026-03-15
 
 > **API v20 confirmed working** (v18 sunset/404, v19 unstable/500).
-> Full write cycle proven: add campaign negative → GAQL verify → remove → verify removal.
-> Smoke test: `scripts/apply-layer/gads-smoke-test.sh`
+> Live write paths: add campaign negative → GAQL verify → remove → verify removal, plus manifest-backed campaign budget update → verify → restore.
+> Smoke test: `scripts/apply-layer/gads-smoke-test.sh negative <cid>` or `scripts/apply-layer/gads-smoke-test.sh budget <cid>`
 
 ---
 
@@ -20,7 +20,7 @@ READ  →  DRAFT  →  APPLY
 
 It defines how approved drafts get executed as real changes in Google Ads accounts — safely, reversibly, and with a complete audit trail.
 
-**This document is the spec.** The actual implementation will follow once the design is validated through real-world draft-review cycles.
+**This document is the design + operating contract for the live implementation in `scripts/apply-layer/`.**
 
 ---
 
@@ -48,9 +48,9 @@ The operator confirms before the mutation executes.
 
 ---
 
-## Scope: First Safe Actions (v1)
+## Scope: Live Safe Actions
 
-Only two mutation types are in scope for v1:
+The live apply layer supports three bounded write categories:
 
 ### Action 1: Add Negative Keywords
 - **What:** Add negative keywords at campaign or ad group level
@@ -62,9 +62,15 @@ Only two mutation types are in scope for v1:
 - **Why second:** Pausing stops traffic to a specific entity without deleting it. All history, quality scores, and configuration remain intact.
 - **Undo:** Set status back to ENABLED. Entity resumes immediately.
 
-### Explicitly NOT in v1 Scope
-- ❌ Budget changes
+### Action 3: Set Campaign Daily Budget
+- **What:** Update `campaign_budget.amount_micros` for a campaign daily budget
+- **How:** Only through an `## Apply Manifest` JSON block embedded in the draft
+- **Why now:** Budget reallocation is a core operator action, but it is gated behind stronger guardrails than the v1 writes
+- **Undo:** Restore the prior `amount_micros`
+
+### Explicitly NOT in Live Scope
 - ❌ Bid strategy changes
+- ❌ Shared budgets / portfolio budgets
 - ❌ Creating new campaigns or ad groups
 - ❌ Modifying RSA assets
 - ❌ Enabling paused entities
@@ -430,10 +436,14 @@ After v1 proves reliable through 30+ successful apply sessions:
 
 ### v2: Budget Changes
 - Increase/decrease campaign daily budget
-- Requires additional safeguards:
-  - Maximum change per action (e.g., ±30% of current budget)
-  - Cooldown period between budget changes (e.g., 7 days)
-  - Total account spend impact estimate
+- Implemented in `scripts/apply-layer/` behind an `## Apply Manifest` JSON block (manifest-first parsing).
+- Safeguards enforced (fail closed):
+  - Maximum change per action: ±30% (configurable per action guardrails)
+  - Cooldown period between budget changes: 7 days (overrideable with `--force`, logs the override)
+  - Tracking gate: block when tracking confidence is Low/Broken or when pending tracking drafts exist
+  - Budget-neutral default: sum(proposed) must equal sum(current) across valid budget actions in a draft
+  - Optional draft-level net increase: only when `meta.budget_policy.allow_net_increase=true`, capped at +10% by default
+  - Strong confirmation prompt: operator must type `confirm budgets`
 
 ### v3: Campaign Creation
 - Create new campaigns from structure drafts

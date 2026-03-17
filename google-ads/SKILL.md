@@ -158,15 +158,18 @@ When analysis produces **actionable findings**, skills write draft documents for
 ### Draft mechanics
 
 1. **Choose the right template** from `drafts/templates/` (negative-draft.md, structure-draft.md, budget-draft.md, rsa-draft.md, tracking-draft.md)
-2. **Write the draft** to `workspace/ads/drafts/YYYY-MM-DD-[type].md`
-3. **Update the index** at `workspace/ads/drafts/_index.md`
-4. **Announce the draft** in the analysis output: "📋 Draft created: `workspace/ads/drafts/2026-03-14-negatives.md` — 8 negative keywords for Campaign X"
+2. **Derive the account slug** from `workspace/ads/account.md` — lowercase, ASCII, hyphenated, 2-3 words max; fall back to CID if needed
+3. **Write the draft** to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-[type].md`
+4. **Update the index** at `workspace/ads/drafts/_index.md`
+5. **If one audit run creates 2+ drafts, also write** `workspace/ads/drafts/_batch-YYYY-MM-DD-[account-slug].md` as the durable audit packet for that run
+6. **Announce the draft** in the analysis output: "Draft created: `workspace/ads/drafts/2026-03-14-east-coast-negatives.md` — 8 negative keywords for Campaign X"
 
 ### Draft quality bar
 - Every proposed action must have: target, detail, risk, reversibility
 - Evidence must link back to specific data (query text, spend amounts, conversion counts)
 - Confidence must be stated with reasoning
 - Dependencies between drafts must be noted
+- The `## Review` checklist must include evidence checked, collateral risk checked, dependencies checked, decision, decision reason, reviewed by, reviewed on, applied on, and notes
 
 ---
 
@@ -209,6 +212,8 @@ Key files:
 | `learnings.md` | Lessons learned (feeds future decisions) |
 | `assets.md` | RSA headlines, descriptions, creative notes |
 | `drafts/_index.md` | Draft queue with statuses |
+| `drafts/_summary.md` | Current prioritized backlog view |
+| `drafts/_batch-*.md` | Point-in-time audit packets for multi-draft audit runs |
 | `drafts/*.md` | Individual draft action proposals |
 
 ### Memory rules
@@ -264,13 +269,13 @@ Use when deciding where to protect, reduce, or scale spend. Pull budget and impr
 Use when launching fresh or rebuilding. Produces a comprehensive plan document (not a draft — plans are standalone deliverables saved to workspace).
 
 ### audit
-Use for the broad synthesis. Runs a mini version of multiple skills. Produces **a prioritized batch of drafts** covering the highest-leverage changes.
+Use for the broad synthesis. Runs a mini version of multiple skills. Produces **a prioritized batch of drafts** covering the highest-leverage changes and, when 2 or more drafts are created, a durable `_batch-YYYY-MM-DD-[account-slug].md` audit packet for that run.
 
 ### landing-review
 Use when the user says "the landing page isn't converting" or wants to understand why clicks aren't becoming leads/sales. **Always runs Fork A (tracking diagnosis) before Fork B (UX/path diagnosis).** Distinguishes tracking failures from page failures — the two most commonly confused root causes. Produces **landing-review drafts** and/or **tracking-fix drafts**. Uses browser/fetch to inspect actual landing pages.
 
 ### draft-summary
-Use when the user wants to review pending drafts, prioritize what to apply, or understand the recommended implementation sequence. Reads all pending drafts, classifies by priority/impact/risk, maps dependencies, and produces a single prioritized summary document at `workspace/ads/drafts/_summary.md`.
+Use when the user wants to review pending drafts, prioritize what to apply, or understand the recommended implementation sequence. Reads all pending drafts, classifies by priority/impact/risk, maps dependencies, and produces a single prioritized backlog snapshot at `workspace/ads/drafts/_summary.md`. Do not reuse `_summary.md` as the audit-run packet; that role belongs to `_batch-*.md`.
 
 ### apply
 Use when the user wants to execute an approved draft. **v1 scope: add negative keywords and pause keywords/ad groups ONLY.** Shows a dry run, requires explicit confirmation, executes via Google Ads API, verifies changes, and writes an audit trail. See `APPLY-LAYER.md` for the full design. See `skills/google-ads-apply/SKILL.md` for the execution protocol.

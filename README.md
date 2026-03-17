@@ -26,7 +26,7 @@ READ  →  DRAFT  →  APPLY
 |-------|-------------|
 | **Read** | Pull live account data via Google's official `google-ads-mcp` MCP server (read-only). Or work with manual CSV exports — same analytical engine either way. |
 | **Draft** | Every actionable finding becomes a concrete proposal — specific negatives, structure changes, budget moves, RSA directions — staged for human review. |
-| **Apply** | Controlled write-back for approved drafts. v1 scope: **add negative keywords** and **pause keywords/ad groups**. Dry run, explicit confirmation, per-action verification, full audit trail, instant undo. |
+| **Apply** | Controlled write-back for approved drafts. Live scope: **add negative keywords**, **pause keywords/ad groups**, and **campaign daily budget changes** via manifest-backed guardrails. Dry run, explicit confirmation, per-action verification, full audit trail, instant undo. |
 
 **See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design, safety model, and roadmap.**
 
@@ -123,6 +123,17 @@ Google Ads Copilot starts from search intent — what people typed, what they me
 
 The repo does not ship any real credentials or live test files. Only templates are committed.
 
+### Install from a Release Bundle
+You can install from the repo as usual, or from a packaged bundle:
+
+```bash
+./install.sh auto
+./install.sh /path/to/google-ads-copilot-0.2.0.tar.gz auto
+./install.sh /path/to/google-ads-copilot-0.2.0 openclaw
+```
+
+Release bundles are built with `./scripts/package/build-release.sh <version>`.
+
 **See [DEMO-WORKFLOW.md](DEMO-WORKFLOW.md) for a guided walkthrough of the full cycle.**
 
 **Environment variables:**
@@ -153,6 +164,8 @@ Every session compounds. The agent writes to `workspace/ads/` — a persistent k
 | `learnings.md` | What the account has taught us |
 | `drafts/` | Staged action proposals |
 | `audit-trail/` | Apply session logs + reversal registry |
+
+Draft filenames use `YYYY-MM-DD-[account-slug]-[type].md`. Multi-draft audit runs also produce `_batch-YYYY-MM-DD-[account-slug].md` as a durable audit packet, while `_summary.md` remains the live prioritized backlog snapshot.
 
 ---
 
@@ -202,7 +215,7 @@ google-ads-copilot/
 
 ---
 
-## v1 Apply Scope
+## Apply Scope
 
 | Action | Status | Risk | Undo |
 |--------|--------|------|------|
@@ -210,20 +223,22 @@ google-ads-copilot/
 | Add ad-group-level negative keyword | ✅ Ready | Low | Remove the negative |
 | Pause keyword | ✅ Ready | Low | Re-enable keyword |
 | Pause ad group | ✅ Ready | Medium | Re-enable ad group |
+| Set campaign daily budget | ✅ Live (manifest-backed) | Medium | Restore the prior `amount_micros` |
 
-**Explicitly excluded from v1:** budget changes, bid strategy changes, campaign creation, RSA edits, enabling paused entities, deletions.
+Budget applies are limited to campaign daily budgets and require an `## Apply Manifest` JSON block plus hard guardrails: max 30% per action, min meaningful delta, 7-day cooldown, tracking confidence gate, pending-tracking-draft block, budget-neutral default, and `confirm budgets` confirmation.
+
+**Still excluded:** shared budgets, bid strategy changes, campaign creation, RSA edits, enabling paused entities, deletions.
 
 ---
 
 ## What's Next
 
-This is a public alpha. The analytical engine and apply layer are solid — tested on real accounts with real money. What's coming:
+This is a public alpha. The analytical engine and apply layer are solid — tested on real accounts with real money. Current next steps:
 
-- **v2 apply scope** — budget changes with safety bounds
-- Expanded write actions as confidence accumulates
+- Expanded write actions after budget apply proves out
 - More example walkthroughs from real (anonymized) accounts
-- Eval coverage for decision quality
-- Packaging for broader distribution
+- Broader eval coverage for decision quality and write-path regressions
+- Packaging and release automation for broader distribution
 
 If you're running Google Ads for clients or your own business, try it. Break it. Tell me what's missing.
 

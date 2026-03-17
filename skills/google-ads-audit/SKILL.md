@@ -245,16 +245,23 @@ The audit produces **multiple drafts** organized by priority. Not everything nee
 4. **Refinement** — RSA refreshes, minor optimizations
 
 For each tier with actionable findings, create a draft:
-- Tracking fixes → `drafts/templates/tracking-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-tracking-fix.md`
-- Negatives → `drafts/templates/negative-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-negatives.md`
-- Structure → `drafts/templates/structure-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-structure.md`
-- Budget → `drafts/templates/budget-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-budget-realloc.md`
-- RSAs → `drafts/templates/rsa-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-rsa-refresh.md`
-- Landing page → `drafts/templates/landing-review-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-landing-review.md`
+- Tracking fixes → `drafts/templates/tracking-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-tracking-fix.md`
+- Negatives → `drafts/templates/negative-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-negatives.md`
+- Structure → `drafts/templates/structure-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-structure.md`
+- Budget → `drafts/templates/budget-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-budget-realloc.md`
+- RSAs → `drafts/templates/rsa-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-rsa-refresh.md`
+- Landing page → `drafts/templates/landing-review-draft.md` → `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-landing-review.md`
 
 **Cross-reference dependencies between drafts.** E.g., "Apply tracking fix before budget scaling."
 
 Update `workspace/ads/drafts/_index.md` with all new drafts.
+If 2 or more drafts are created in the same audit run, also write `workspace/ads/drafts/_batch-YYYY-MM-DD-[account-slug].md` with:
+- Account, date range, and tracking confidence
+- Drafts created in that run grouped by priority tier
+- Dependency chain and recommended review order
+- Quick-apply candidates
+
+Do not list the `_batch-*.md` packet in `_index.md`. It is an audit packet, not a draft.
 
 ### Always update workspace memory:
 - `workspace/ads/intent-map.md` — build or update from search terms

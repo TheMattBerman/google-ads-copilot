@@ -78,14 +78,18 @@ Existing negatives that aren't wrong, but are scoped too broadly or placed at th
 ---
 
 ## Dependencies
-- [e.g., "Apply structure changes from 2026-03-14-structure.md first" or "None"]
+- [e.g., "Apply structure changes from 2026-03-14-east-coast-structure.md first" or "None"]
 
 ## Confidence
 [High / Medium / Low] — [reasoning]
 
 ## Review
-- [ ] Reviewed by operator
-- [ ] Approved for implementation
-- Reviewed on: ____
-- Applied on: ____
-- Notes: ____
+- [ ] Evidence checked
+- [ ] Collateral risk checked
+- [ ] Dependencies checked
+- **Decision:** approve | defer | reject
+- **Decision reason:** ____
+- **Reviewed by:** ____
+- **Reviewed on:** ____
+- **Applied on:** ____
+- **Notes:** ____

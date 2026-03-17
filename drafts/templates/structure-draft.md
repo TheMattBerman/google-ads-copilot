@@ -25,14 +25,18 @@ Account: [Customer ID / Name]
 ### Change 2: ...
 
 ## Dependencies
-- [e.g., "Add negatives from 2026-03-14-negatives.md before restructuring"]
+- [e.g., "Add negatives from 2026-03-14-east-coast-negatives.md before restructuring"]
 
 ## Confidence
 [High / Medium / Low] — [reasoning]
 
 ## Review
-- [ ] Reviewed by operator
-- [ ] Approved for implementation
-- Reviewed on: ____
-- Applied on: ____
-- Notes: ____
+- [ ] Evidence checked
+- [ ] Collateral risk checked
+- [ ] Dependencies checked
+- **Decision:** approve | defer | reject
+- **Decision reason:** ____
+- **Reviewed by:** ____
+- **Reviewed on:** ____
+- **Applied on:** ____
+- **Notes:** ____

@@ -59,7 +59,7 @@ No API access? Skip to [Export Mode Demo](#export-mode-demo-no-api-needed) — t
 **What to look for:**
 - Intent clusters (buyer vs research vs junk)
 - Waste quantification (spend on non-converting queries)
-- Draft created in `workspace/ads/drafts/`
+- Draft created in `workspace/ads/drafts/` using `YYYY-MM-DD-[account-slug]-[type].md`
 - Cross-referencing: which *keywords* are generating waste
 
 ### Step 4: Build the Intent Map
@@ -103,6 +103,7 @@ No API access? Skip to [Export Mode Demo](#export-mode-demo-no-api-needed) — t
 - Quick wins you could apply right now
 - Blocked actions (e.g., budget decisions blocked by tracking problems)
 - Dependency chains between drafts
+- `_summary.md` as the live backlog snapshot, distinct from any `_batch-*.md` audit packet left by a multi-draft audit run
 
 ### Step 7: Apply a Draft (the payoff)
 

@@ -1,13 +1,15 @@
 # Draft Queue
 
+> Only list real drafts here. Do not list `_summary.md` or `_batch-*.md`.
+
 ## Proposed
-<!-- Drafts awaiting review -->
+<!-- Format: - [ ] YYYY-MM-DD-account-slug-type.md — P1 | short summary | Depends on: none -->
 
 ## Approved
-<!-- Drafts approved, ready to implement -->
+<!-- Ready to implement after review. Keep priority and dependency notes inline. -->
 
 ## Applied
-<!-- Drafts that have been implemented -->
+<!-- Include applied date when known. Example: (applied 2026-03-16) -->
 
 ## Rejected
-<!-- Drafts declined — include reason for learning -->
+<!-- Include the rejection reason so the system compounds learning. -->

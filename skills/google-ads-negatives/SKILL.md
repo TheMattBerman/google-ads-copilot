@@ -139,11 +139,11 @@ See `data/export-formats.md` for recommended format.
 This skill's primary deliverable is a negative keyword draft. Every run that identifies exclusion-worthy terms produces one.
 
 Create using `drafts/templates/negative-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-negatives.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-negatives.md`
 - Include every recommended negative with all fields: keyword, match type, scope, reason, spend wasted, collateral risk, reversibility
 - Group negatives by theme (e.g., "Job-seeker exclusions," "Informational queries," "Competitor brand terms")
 - Update `workspace/ads/drafts/_index.md`
-- Announce: "📋 Draft created: `workspace/ads/drafts/YYYY-MM-DD-negatives.md` — N negatives for [scope description]"
+- Announce: "Draft created: `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-negatives.md` — N negatives for [scope description]"
 
 ### Negatives to REMOVE
 The draft template now includes three sections: Add, Remove, and Narrow/Move.

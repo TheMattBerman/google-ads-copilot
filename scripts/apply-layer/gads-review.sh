@@ -50,6 +50,69 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+has_heading() {
+  local file="$1"
+  local heading="$2"
+  grep -q "^${heading}\$" "$file"
+}
+
+review_checkbox_state() {
+  local file="$1"
+  local label="$2"
+
+  awk -v label="$label" '
+    index($0, "- [x] " label) == 1 || index($0, "- [X] " label) == 1 { print "done"; exit }
+    index($0, "- [ ] " label) == 1 { print "pending"; exit }
+  ' "$file"
+}
+
+review_value() {
+  local file="$1"
+  local label="$2"
+
+  awk -v label="$label" '
+    {
+      prefix = "- **" label ":**"
+      if (index($0, prefix) == 1) {
+        value = substr($0, length(prefix) + 1)
+        sub(/^[[:space:]]+/, "", value)
+        print value
+        exit
+      }
+    }
+  ' "$file"
+}
+
+normalize_review_value() {
+  local value="$1"
+
+  case "$value" in
+    ""|"____"|"approve | defer | reject")
+      echo "pending"
+      ;;
+    *)
+      echo "$value"
+      ;;
+  esac
+}
+
+render_review_checkbox() {
+  local label="$1"
+  local state="$2"
+
+  case "$state" in
+    done)
+      echo -e "    ${GREEN}✓${NC} ${label}"
+      ;;
+    pending)
+      echo -e "    ${DIM}○ ${label}${NC}"
+      ;;
+    *)
+      echo -e "    ${YELLOW}! ${label} missing${NC}"
+      ;;
+  esac
+}
+
 # ═══════════════════════════════════════════════════════════
 # Review a single draft
 # ═══════════════════════════════════════════════════════════
@@ -132,20 +195,63 @@ review_draft() {
   done
   echo ""
 
-  # Extract confidence from the draft file
-  local confidence
+  # Extract section metadata from the draft file
+  local evidence_preview confidence deps
+  local evidence_checked collateral_checked dependencies_checked
+  local decision decision_reason reviewed_by reviewed_on applied_on notes
+  local -a missing_sections=()
+
+  evidence_preview=$(gads_heading_body_line "$draft_file" "## Evidence" | head -c 100)
   confidence=$(gads_heading_body_line "$draft_file" "## Confidence" | head -c 80)
+  deps=$(gads_heading_body_line "$draft_file" "## Dependencies" | head -c 120)
+
+  [ -n "$evidence_preview" ] || missing_sections+=("## Evidence")
+  [ -n "$confidence" ] || missing_sections+=("## Confidence")
+  [ -n "$deps" ] || missing_sections+=("## Dependencies")
+  has_heading "$draft_file" "## Review" || missing_sections+=("## Review")
+
+  evidence_checked=$(review_checkbox_state "$draft_file" "Evidence checked")
+  collateral_checked=$(review_checkbox_state "$draft_file" "Collateral risk checked")
+  dependencies_checked=$(review_checkbox_state "$draft_file" "Dependencies checked")
+  decision=$(normalize_review_value "$(review_value "$draft_file" "Decision")")
+  decision_reason=$(normalize_review_value "$(review_value "$draft_file" "Decision reason")")
+  reviewed_by=$(normalize_review_value "$(review_value "$draft_file" "Reviewed by")")
+  reviewed_on=$(normalize_review_value "$(review_value "$draft_file" "Reviewed on")")
+  applied_on=$(normalize_review_value "$(review_value "$draft_file" "Applied on")")
+  notes=$(normalize_review_value "$(review_value "$draft_file" "Notes")")
+
+  if [ -n "$evidence_preview" ]; then
+    echo -e "  ${CYAN}Evidence:${NC} ${evidence_preview}"
+    echo ""
+  fi
 
   if [ -n "$confidence" ]; then
     echo -e "  ${CYAN}Confidence:${NC} ${confidence}"
     echo ""
   fi
 
-  # Extract dependencies
-  local deps
-  deps=$(gads_heading_body_line "$draft_file" "## Dependencies" | head -c 120)
   if [ -n "$deps" ]; then
     echo -e "  ${CYAN}Dependencies:${NC} ${deps}"
+    echo ""
+  fi
+
+  echo -e "  ${CYAN}Review Metadata:${NC}"
+  render_review_checkbox "Evidence checked" "$evidence_checked"
+  render_review_checkbox "Collateral risk checked" "$collateral_checked"
+  render_review_checkbox "Dependencies checked" "$dependencies_checked"
+  echo -e "    Decision: ${decision}"
+  echo -e "    Decision reason: ${decision_reason}"
+  echo -e "    Reviewed by: ${reviewed_by}"
+  echo -e "    Reviewed on: ${reviewed_on}"
+  echo -e "    Applied on: ${applied_on}"
+  echo -e "    Notes: ${notes}"
+  echo ""
+
+  if [ "${#missing_sections[@]}" -gt 0 ]; then
+    echo -e "  ${YELLOW}Completeness Checks:${NC}"
+    for section in "${missing_sections[@]}"; do
+      echo -e "    ${YELLOW}! Missing or empty ${section}${NC}"
+    done
     echo ""
   fi
 

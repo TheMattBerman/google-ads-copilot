@@ -116,7 +116,7 @@ Ask the user for:
 **Trigger:** Analysis identifies campaigns where budget is clearly misallocated (strong campaign starved while weak campaign overfunded), AND tracking confidence is at least Medium.
 
 Create using `drafts/templates/budget-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-budget-realloc.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-budget-realloc.md`
 - Include: current daily budget, proposed daily budget, change amount, reason, expected impact
 - Show net budget change (budget-neutral reallocation vs. total spend change)
 - Note tracking confidence gate

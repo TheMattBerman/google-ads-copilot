@@ -108,7 +108,7 @@ Ask the user for:
 **Trigger:** Analysis shows (a) LOW-performing assets that could be replaced, or (b) buyer language patterns not represented in current ads.
 
 Create using `drafts/templates/rsa-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-rsa-refresh.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-rsa-refresh.md`
 - Include specific headlines (≤30 chars) and descriptions (≤90 chars)
 - Note pin recommendations (use sparingly)
 - Note which assets to consider removing and why

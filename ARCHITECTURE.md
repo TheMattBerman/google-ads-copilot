@@ -124,11 +124,13 @@ Every skill that produces actionable findings writes to the drafts system:
 
 ```
 workspace/ads/drafts/
-├── 2026-03-14-negatives.md        # Specific negatives to add
-├── 2026-03-14-structure.md        # Structure changes to make
-├── 2026-03-12-rsa-refresh.md      # RSA copy changes
-├── 2026-03-10-budget-realloc.md   # Budget reallocation proposal
-└── _index.md                      # Draft queue with status
+├── 2026-03-14-east-coast-negatives.md   # Specific negatives to add
+├── 2026-03-14-east-coast-structure.md   # Structure changes to make
+├── 2026-03-12-east-coast-rsa-refresh.md # RSA copy changes
+├── 2026-03-10-east-coast-budget-realloc.md
+├── _batch-2026-03-14-east-coast.md      # Audit packet for one multi-draft run
+├── _summary.md                           # Current prioritized backlog view
+└── _index.md                             # Draft queue with status
 ```
 
 ### Draft document format
@@ -162,10 +164,16 @@ Actions that should happen before or after this one.
 ## Confidence
 High / Medium / Low — with reasoning.
 
-## Approval
-- [ ] Reviewed by operator
-- [ ] Approved for implementation
-- Applied on: ____
+## Review
+- [ ] Evidence checked
+- [ ] Collateral risk checked
+- [ ] Dependencies checked
+- **Decision:** approve | defer | reject
+- **Decision reason:** ____
+- **Reviewed by:** ____
+- **Reviewed on:** ____
+- **Applied on:** ____
+- **Notes:** ____
 ```
 
 ### Draft types
@@ -353,7 +361,9 @@ google-ads-copilot/
 │       ├── learnings.md
 │       ├── assets.md
 │       └── drafts/                 # NEW: per-account draft queue
-│           └── _index.md
+│           ├── _index.md
+│           ├── _summary.md
+│           └── _batch-*.md
 │
 ├── examples/
 │   ├── plan-example.md
@@ -403,9 +413,9 @@ google-ads-copilot/
 - [x] Add draft review workflow to daily operator
 - [x] Add "negatives to remove/narrow/move" sections to negative draft template
 - [x] Tighten tracking confidence rubric with explicit thresholds
-- [ ] Account-slug naming for drafts (e.g., `2026-03-14-east-coast-negatives.md`)
-- [ ] Batch summary file for multi-draft audit runs
-- [ ] Draft review checklist UX improvements
+- [x] Account-slug naming for drafts (e.g., `2026-03-14-east-coast-negatives.md`)
+- [x] Batch summary file for multi-draft audit runs
+- [x] Draft review checklist UX improvements
 
 ### Phase 3: Apply Layer (Live — v1)
 - [x] Build write-action implementations (v1: negatives + pauses)

@@ -1,0 +1,152 @@
+[
+  {
+    "id": "manifest-parser-budget-draft",
+    "type": "parser_fixture",
+    "fixture": "draft-budget-manifest.md",
+    "expected": {
+      "action_count": 1,
+      "first_type": "SET_CAMPAIGN_DAILY_BUDGET",
+      "mode": "manifest"
+    }
+  },
+  {
+    "id": "tracking-low-blocks-budget-write",
+    "type": "budget_guardrail",
+    "input": {
+      "tracking_confidence": "low",
+      "pending_tracking_drafts": false,
+      "actions": [
+        {
+          "current_micros": 50000000,
+          "proposed_micros": 45000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 30
+        }
+      ]
+    },
+    "expected": {
+      "allowed": false,
+      "reason": "tracking_confidence"
+    }
+  },
+  {
+    "id": "pending-tracking-draft-blocks-budget-write",
+    "type": "budget_guardrail",
+    "input": {
+      "tracking_confidence": "high",
+      "pending_tracking_drafts": true,
+      "actions": [
+        {
+          "current_micros": 50000000,
+          "proposed_micros": 45000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 30
+        }
+      ]
+    },
+    "expected": {
+      "allowed": false,
+      "reason": "pending_tracking_drafts"
+    }
+  },
+  {
+    "id": "budget-neutral-unless-explicitly-allowed",
+    "type": "budget_guardrail",
+    "input": {
+      "tracking_confidence": "high",
+      "pending_tracking_drafts": false,
+      "actions": [
+        {
+          "current_micros": 50000000,
+          "proposed_micros": 55000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 30
+        }
+      ]
+    },
+    "expected": {
+      "allowed": false,
+      "reason": "budget_neutrality"
+    }
+  },
+  {
+    "id": "net-increase-capped-at-10-pct",
+    "type": "budget_guardrail",
+    "input": {
+      "tracking_confidence": "high",
+      "pending_tracking_drafts": false,
+      "meta": {
+        "budget_policy": {
+          "allow_net_increase": true,
+          "max_net_increase_pct": 10
+        }
+      },
+      "actions": [
+        {
+          "current_micros": 50000000,
+          "proposed_micros": 56000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 30
+        }
+      ]
+    },
+    "expected": {
+      "allowed": false,
+      "reason": "net_increase_cap"
+    }
+  },
+  {
+    "id": "cooldown-blocks-repeat-budget-change",
+    "type": "budget_guardrail",
+    "input": {
+      "tracking_confidence": "high",
+      "pending_tracking_drafts": false,
+      "actions": [
+        {
+          "current_micros": 50000000,
+          "proposed_micros": 45000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 2
+        }
+      ]
+    },
+    "expected": {
+      "allowed": false,
+      "reason": "cooldown"
+    }
+  },
+  {
+    "id": "budget-neutral-reallocation-passes",
+    "type": "budget_guardrail",
+    "input": {
+      "tracking_confidence": "high",
+      "pending_tracking_drafts": false,
+      "actions": [
+        {
+          "current_micros": 50000000,
+          "proposed_micros": 55000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 30
+        },
+        {
+          "current_micros": 60000000,
+          "proposed_micros": 55000000,
+          "max_pct_change": 30,
+          "cooldown_days": 7,
+          "days_since_last_change": 30
+        }
+      ]
+    },
+    "expected": {
+      "allowed": true,
+      "reason": "ok",
+      "net_delta_micros": 0
+    }
+  }
+]

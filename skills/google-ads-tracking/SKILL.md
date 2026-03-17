@@ -161,7 +161,7 @@ For each problem found, assess:
 **Trigger:** Any tracking problem at Medium confidence or lower.
 
 Create using `drafts/templates/tracking-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-tracking-fix.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-tracking-fix.md`
 - Include specific fixes: what to change, current vs. proposed state
 - Note the impact on reported conversions ("Conversions will appear to drop ~40%")
 - Note the impact on smart bidding ("2-3 week recalibration period")

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tracking-duplicate-risk",
+    "category": "tracking-broken",
+    "description": "Duplicate conversion setup should lower tracking confidence.",
+    "input": "GA4 import and native Google Ads tag both count the same lead form as primary conversion",
+    "expected": {
+      "tracking_confidence": "low",
+      "issue": "duplicate_counting"
+    }
+  },
+  {
+    "id": "tracking-micro-conversion-pollution",
+    "category": "tracking-broken",
+    "description": "Micro-conversions set as primary should be flagged as poor optimization input.",
+    "input": "Add to cart and page scroll are set as primary conversions for bidding",
+    "expected": {
+      "tracking_confidence": "low_or_medium",
+      "issue": "micro_conversion_pollution"
+    }
+  },
+  {
+    "id": "budget-fix-before-scale",
+    "category": "budget-decision",
+    "description": "Noisy generic traffic should not be scaled just because spend is available.",
+    "input": "Generic campaign has rising spend, weak conversion quality, and mixed educational/search intent",
+    "expected": {
+      "budget_action": "fix_before_scaling"
+    }
+  },
+  {
+    "id": "competitor-comparison",
+    "category": "competitor-isolate",
+    "description": "Competitor comparison query should be isolated, not mixed into generic traffic.",
+    "input": "hubspot alternatives pricing",
+    "expected": {
+      "intent_class": "competitor_or_comparison",
+      "action": "isolate"
+    }
+  },
+  {
+    "id": "rsa-use-buyer-language",
+    "category": "rsa-direction",
+    "description": "RSA direction should use real buyer language from query patterns.",
+    "input": "Top converting modifiers are demo, pricing, and law firm crm",
+    "expected": {
+      "rsa_direction": "use_query_language"
+    }
+  }
+]

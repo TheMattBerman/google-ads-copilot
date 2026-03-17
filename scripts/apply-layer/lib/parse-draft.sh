@@ -38,6 +38,119 @@ _first_quoted_value() {
   printf '%s\n' "$1" | sed -nE 's/^[^"]*"([^"]+)".*/\1/p' | head -1
 }
 
+_extract_apply_manifest_json() {
+  local draft_file="$1"
+
+  # Extract the first fenced JSON block under "## Apply Manifest".
+  # Supports ```json ... ``` and ~~~json ... ~~~ fences.
+  awk '
+    $0 == "## Apply Manifest" { in_section = 1; next }
+    in_section && $0 ~ /^## / { in_section = 0 }
+
+    in_section && $0 ~ /^```json[[:space:]]*$/ { in_json = 1; fence = "```"; next }
+    in_section && $0 ~ /^~~~json[[:space:]]*$/ { in_json = 1; fence = "~~~"; next }
+
+    in_json && $0 == fence { exit }
+    in_json { print }
+  ' "$draft_file"
+}
+
+_parse_apply_manifest() {
+  local draft_file="$1"
+  local manifest_json
+  manifest_json=$(_extract_apply_manifest_json "$draft_file")
+
+  if [ -z "${manifest_json//[[:space:]]/}" ]; then
+    echo ""
+    return 0
+  fi
+
+  # Validate minimal shape and reject unknown action types up front.
+  if ! echo "$manifest_json" | jq -e '
+    .draft_version == "0.2"
+    and (.customer_id | type == "string")
+    and (.actions | type == "array")
+    and (.actions | length > 0)
+    and all(.actions[]; (.type // "") as $t | [
+      "ADD_NEGATIVE_CAMPAIGN",
+      "ADD_NEGATIVE_ADGROUP",
+      "PAUSE_KEYWORD",
+      "PAUSE_ADGROUP",
+      "SET_CAMPAIGN_DAILY_BUDGET"
+    ] | index($t))
+  ' >/dev/null 2>&1; then
+    echo "ERROR: Apply Manifest present but invalid (expected schema v0.2)" >&2
+    return 1
+  fi
+
+  # Transform manifest actions into the legacy apply-layer action shape.
+  # This keeps gads-apply.sh compatible while enabling new action types (budgets).
+  echo "$manifest_json" | jq -c '
+    def req_str($obj; $path):
+      ($obj | getpath($path) // error("missing required string field: " + ($path|tostring)))
+      | select(type=="string" and length>0);
+
+    def req_int($obj; $path):
+      ($obj | getpath($path) // error("missing required integer field: " + ($path|tostring)))
+      | select(type=="number")
+      | floor;
+
+    def upcase($s):
+      ($s | ascii_upcase);
+
+    . as $m
+    | {
+        customer_id: $m.customer_id,
+        customer_name: ($m.customer_name // ""),
+        meta: ($m.meta // {}),
+        actions: (
+          $m.actions
+          | to_entries
+          | map(
+              .key as $i
+              | .value as $a
+              | {
+                  index: ($i + 1),
+                  manifest_id: ($a.id // ("a" + (($i+1)|tostring))),
+                  manifest_type: ($a.type // ""),
+                  type: (
+                    if $a.type == "ADD_NEGATIVE_CAMPAIGN" or $a.type == "ADD_NEGATIVE_ADGROUP" then "ADD_NEGATIVE"
+                    else $a.type end
+                  ),
+                  keyword: (
+                    if $a.type == "SET_CAMPAIGN_DAILY_BUDGET" then ""
+                    elif $a.type == "PAUSE_ADGROUP" then (req_str($a; ["targets","adgroup_name"]))
+                    else (req_str($a; ["targets","keyword_text"])) end
+                  ),
+                  match_type: (
+                    if $a.type == "SET_CAMPAIGN_DAILY_BUDGET" or $a.type == "PAUSE_ADGROUP" then "N/A"
+                    else (upcase(req_str($a; ["targets","match_type"]))) end
+                  ),
+                  scope: (
+                    if $a.type == "ADD_NEGATIVE_ADGROUP" or $a.type == "PAUSE_KEYWORD" then "AD_GROUP"
+                    else "CAMPAIGN" end
+                  ),
+                  campaign: (
+                    req_str($a; ["targets","campaign_name"])
+                  ),
+                  adgroup: (
+                    if $a.type == "ADD_NEGATIVE_ADGROUP" or $a.type == "PAUSE_KEYWORD" or $a.type == "PAUSE_ADGROUP" then (req_str($a; ["targets","adgroup_name"]))
+                    else null end
+                  ),
+                  reason: ($a.reason // ""),
+                  depends_on: ($a.depends_on // []),
+                  guardrails: ($a.guardrails // {}),
+
+                  proposed_daily_budget_micros: (
+                    if $a.type == "SET_CAMPAIGN_DAILY_BUDGET" then (req_int($a; ["targets","proposed_daily_budget_micros"]))
+                    else null end
+                  )
+                }
+            )
+        )
+      }'
+}
+
 # Parse the draft header to extract account info
 parse_draft_header() {
   local draft_file="$1"
@@ -429,9 +542,36 @@ parse_draft() {
     return 1
   fi
 
-  local header negatives pauses pause_sections
+  local header negatives pauses pause_sections parsed_manifest
 
   header=$(parse_draft_header "$draft_file")
+  parsed_manifest=$(_parse_apply_manifest "$draft_file")
+
+  if [ -n "${parsed_manifest//[[:space:]]/}" ]; then
+    # Manifest-first mode (authoritative).
+    local manifest_customer_id manifest_customer_name
+    manifest_customer_id=$(echo "$parsed_manifest" | jq -r '.customer_id')
+    manifest_customer_name=$(echo "$parsed_manifest" | jq -r '.customer_name // empty')
+
+    jq -n \
+      --arg draft_file "$draft_file" \
+      --arg customer_id "$manifest_customer_id" \
+      --arg customer_name "$manifest_customer_name" \
+      --arg status "$(echo "$header" | jq -r '.status')" \
+      --argjson actions "$(echo "$parsed_manifest" | jq -c '.actions')" \
+      --argjson meta "$(echo "$parsed_manifest" | jq -c '.meta // {}')" \
+      '{
+        draft_file: $draft_file,
+        customer_id: $customer_id,
+        customer_name: $customer_name,
+        status: $status,
+        action_count: ($actions | length),
+        actions: $actions,
+        meta: $meta
+      }'
+    return 0
+  fi
+
   negatives=$(_parse_section_a "$draft_file")
   pauses=$(_parse_section_d "$draft_file")
   pause_sections=$(_parse_pause_sections "$draft_file")

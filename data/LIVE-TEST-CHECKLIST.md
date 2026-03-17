@@ -47,9 +47,11 @@ Use this checklist before running a live connected-mode analysis on a new accoun
 ### Draft Quality
 - [ ] Every actionable finding has a corresponding draft
 - [ ] Drafts use account-slug naming
+- [ ] Multi-draft audits create `_batch-YYYY-MM-DD-[account-slug].md`
 - [ ] Negative drafts include Add/Remove/Narrow sections as appropriate
 - [ ] Dependencies between drafts noted
 - [ ] `workspace/ads/drafts/_index.md` updated
+- [ ] Review checklist fields are present and readable
 
 ---
 
@@ -58,6 +60,7 @@ Use this checklist before running a live connected-mode analysis on a new accoun
 - [ ] Workspace memory files updated: findings.md, intent-map.md, queries.md, negatives.md
 - [ ] Account.md updated with tracking confidence and campaign summary
 - [ ] All drafts listed in _index.md with correct statuses
+- [ ] `_summary.md` reflects the current backlog rather than the audit packet
 - [ ] Learnings captured in learnings.md
 
 ---

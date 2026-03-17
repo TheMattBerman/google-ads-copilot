@@ -26,6 +26,9 @@ APPLY-IMPLEMENTATION.md
 # Token caches
 /tmp/gads-copilot-token.json
 
+# Release artifacts
+dist/
+
 # OS
 .DS_Store
 Thumbs.db

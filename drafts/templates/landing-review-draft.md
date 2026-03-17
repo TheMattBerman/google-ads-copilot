@@ -61,15 +61,19 @@ and the highest-priority fix.]
 - **Cross-reference with intent map:** [link to workspace/ads/intent-map.md findings]
 
 ## Dependencies
-- [e.g., "Fix tracking (2026-03-15-tracking-fix.md) before assessing conversion rate improvement"]
+- [e.g., "Fix tracking (2026-03-15-acme-tracking-fix.md) before assessing conversion rate improvement"]
 - [e.g., "Apply structure changes so each intent class routes to the right page"]
 
 ## Confidence
 [High / Medium / Low] — [reasoning]
 
 ## Review
-- [ ] Reviewed by operator
-- [ ] Approved for implementation
-- Reviewed on: ____
-- Applied on: ____
-- Notes: ____
+- [ ] Evidence checked
+- [ ] Collateral risk checked
+- [ ] Dependencies checked
+- **Decision:** approve | defer | reject
+- **Decision reason:** ____
+- **Reviewed by:** ____
+- **Reviewed on:** ____
+- **Applied on:** ____
+- **Notes:** ____

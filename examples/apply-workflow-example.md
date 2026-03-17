@@ -19,7 +19,7 @@ The search terms analysis produced a draft: 13 negative keywords + 1 keyword pau
 ## Step 1: Review the Draft
 
 ```
-/google-ads apply review workspace/ads/drafts/negatives-draft.md
+/google-ads apply review workspace/ads/drafts/2026-03-15-acme-negatives.md
 ```
 
 Output:
@@ -28,7 +28,7 @@ Output:
  DRAFT REVIEW (no API calls)
 ═══════════════════════════════════════════════════════
 
- Draft:   negatives-draft.md
+ Draft:   2026-03-15-acme-negatives.md
  Status:  proposed
  Actions: 14 total
 
@@ -58,7 +58,7 @@ Output:
 ## Step 2: Apply the Draft
 
 ```
-/google-ads apply workspace/ads/drafts/negatives-draft.md
+/google-ads apply workspace/ads/drafts/2026-03-15-acme-negatives.md
 ```
 
 ### Dry Run Output
@@ -127,7 +127,7 @@ The audit trail records every action with timestamps, resource IDs, and reversal
 ```markdown
 ## Apply Session — 2026-03-15 16:09
 
-**Draft:** negatives-draft.md
+**Draft:** 2026-03-15-acme-negatives.md
 **Account:** Acme Equipment Co. (1234567890)
 **Actions planned:** 14
 **Started:** 2026-03-15T16:09:51-05:00

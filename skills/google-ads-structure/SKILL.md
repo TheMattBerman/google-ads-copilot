@@ -117,7 +117,7 @@ Ask the user for:
 **Trigger:** Analysis identifies intent mixing with measurable performance impact.
 
 Create using `drafts/templates/structure-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-structure.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-structure.md`
 - Specify: current state, proposed state, keywords to move, budget impact, risk, reversibility
 - Note dependencies on other drafts (e.g., "Add negatives first to prevent traffic bleed during restructure")
 - Update `workspace/ads/drafts/_index.md`

@@ -2,10 +2,11 @@
 name: google-ads-apply
 description: >
   Execute approved draft actions in Google Ads accounts. Supports four safe
-  mutation types: add campaign-level negatives, add ad-group-level negatives,
-  pause keywords, and pause ad groups. Requires human confirmation via
-  dry-run → approve → execute → verify → audit flow. All actions are logged
-  in the audit trail and fully reversible.
+  mutation types plus bounded budget writes: add campaign-level negatives, add
+  ad-group-level negatives, pause keywords, pause ad groups, and set campaign
+  daily budgets through an Apply Manifest. Requires human confirmation via
+  dry-run → approve → execute → verify → audit flow. All actions are logged in
+  the audit trail and fully reversible.
 argument-hint: "[draft-file] | review [draft-file|--all] | status | undo [action-id] | undo-draft [draft-file] | log"
 ---
 
@@ -42,8 +43,8 @@ Read workspace:
 
 **Flow:**
 1. Read the draft file
-2. Parse all proposed actions (negatives, keyword pauses, ad group pauses)
-3. Validate each action (correct account, valid targets, within v1 scope)
+2. Parse all proposed actions (manifest-first for budget drafts; legacy parsing for v1 negatives/pauses)
+3. Validate each action (correct account, valid targets, within live apply scope)
 4. Resolve human-readable names to Google Ads resource IDs via GAQL
 5. Display dry run with every mutation listed, action type summary, and risk assessment
 6. Wait for operator confirmation ("confirm" or "cancel")
@@ -110,15 +111,16 @@ Shows recent apply sessions from `workspace/ads/audit-trail/_log.md`.
 
 ---
 
-## Scope Guardrails (v1)
+## Scope Guardrails (v1 + v2 budgets)
 
-### Allowed Actions (4 types)
+### Allowed Actions
 | Action | Target | Scope | Risk |
 |--------|--------|-------|------|
 | Add negative keyword | Campaign criterion | Campaign-level negative | Low |
 | Add negative keyword | Ad group criterion | Ad group-level negative | Low |
 | Pause keyword | Ad group criterion | Set status to PAUSED | Low |
 | Pause ad group | Ad group | Set status to PAUSED | Medium |
+| Set campaign daily budget | Campaign budget | Update `amount_micros` | Medium |
 
 ### Why These Are Safe
 - **Negative keywords** can only REDUCE traffic. They cannot increase spend, break ads, or corrupt tracking.
@@ -127,7 +129,7 @@ Shows recent apply sessions from `workspace/ads/audit-trail/_log.md`.
 - **All are instantly reversible:** remove the negative, or set status back to ENABLED.
 
 ### Blocked Actions (Hard Reject)
-If a draft contains actions outside v1 scope, the apply command will:
+If a draft contains actions outside the supported scope, the apply command will:
 1. List the out-of-scope actions
 2. Explain which are out of scope and why
 3. Offer to apply ONLY the in-scope actions
@@ -135,7 +137,6 @@ If a draft contains actions outside v1 scope, the apply command will:
 
 | Action | Version | Why Blocked |
 |--------|---------|-------------|
-| Budget changes | v2 | Can increase spend |
 | Bid strategy changes | v2 | Can disrupt Smart Bidding learning |
 | Campaign creation | v3 | Large blast radius |
 | RSA modifications | v4 | Learning period impact |
@@ -157,6 +158,11 @@ The apply layer parses these sections from draft markdown files:
 
 Both `negative-draft.md` and `pause-draft.md` templates are supported. Mixed-type drafts (negatives + pauses in one file) are fully supported — the parser extracts from all applicable sections and deduplicates.
 
+Budget drafts are different:
+- They MUST include `## Apply Manifest`
+- The manifest is authoritative when present
+- Draft-level `meta.budget_policy` controls whether any net increase is allowed
+
 ### Draft Templates
 - `drafts/templates/negative-draft.md` — negative keyword additions + removals + narrows
 - `drafts/templates/pause-draft.md` — keyword pauses + ad group pauses + impact summary
@@ -174,7 +180,7 @@ Before showing the dry run, validate:
 5. **Match type valid:** PHRASE, EXACT, or BROAD only
 6. **Target exists:** Keyword being paused still exists and is currently ENABLED
 7. **Ad group status:** For ad group pause, target is currently ENABLED
-8. **Within scope:** All actions are v1 (add negative, pause keyword, pause ad group)
+8. **Within scope:** Supported actions are add negative, pause keyword, pause ad group, and manifest-backed campaign daily budget changes
 
 If validation fails, report which actions failed and why. Don't block the entire apply — allow valid actions to proceed.
 

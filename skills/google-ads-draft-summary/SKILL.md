@@ -41,6 +41,8 @@ A **Draft Summary** — a single document that:
 5. Flags **blocked actions** (e.g., budget scaling blocked by tracking problems)
 6. Estimates **total impact** of applying all pending changes
 
+This is the current backlog snapshot, not the audit-run packet. `_summary.md` should always reflect the latest pending queue. Durable audit packets belong in `_batch-*.md`.
+
 ---
 
 ## Priority Classification
@@ -215,6 +217,7 @@ Output the Draft Summary document to `workspace/ads/drafts/_summary.md`
 ## Output Locations
 
 - **Summary document:** `workspace/ads/drafts/_summary.md` (overwritten each time)
+- **Audit packets:** `workspace/ads/drafts/_batch-YYYY-MM-DD-[account-slug].md` (created by `/google-ads audit` when one run emits 2+ drafts)
 - **Index update:** Update `workspace/ads/drafts/_index.md` if any status changes are warranted
 - **Console output:** Also display the summary inline for immediate review
 

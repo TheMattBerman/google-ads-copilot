@@ -238,6 +238,43 @@ mutate_pause_adgroup() {
 }
 
 # ═══════════════════════════════════════════════════════════
+# MUTATION: Set campaign daily budget (campaign budget amountMicros)
+# ═══════════════════════════════════════════════════════════
+mutate_set_campaign_budget_micros() {
+  local customer_id="$1"
+  local campaign_budget_resource_name="$2"   # customers/{cid}/campaignBudgets/{budget_id}
+  local proposed_micros="$3"                 # integer micros
+
+  local payload
+  payload=$(jq -n \
+    --arg rn "$campaign_budget_resource_name" \
+    --argjson micros "$proposed_micros" \
+    '{
+      "operations": [{
+        "updateMask": "amount_micros",
+        "update": {
+          "resourceName": $rn,
+          "amountMicros": $micros
+        }
+      }]
+    }')
+
+  local url="${GADS_API_BASE}/customers/${customer_id}/campaignBudgets:mutate"
+
+  local result
+  if result=$(_gads_call "POST" "$url" "$payload"); then
+    local resource_name
+    resource_name=$(echo "$result" | jq -r '.results[0].resourceName // empty')
+    [ -z "$resource_name" ] && resource_name="$campaign_budget_resource_name"
+    jq -n --arg rn "$resource_name" '{success: true, resource_name: $rn}'
+  else
+    local error_msg
+    error_msg=$(echo "$result" 2>&1 | jq -r '.error.message // "Unknown error"' 2>/dev/null || echo "API call failed")
+    jq -n --arg msg "$error_msg" '{success: false, error: $msg}'
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════
 # REVERSAL: Remove a campaign criterion (undo negative keyword)
 # ═══════════════════════════════════════════════════════════
 mutate_remove_campaign_criterion() {

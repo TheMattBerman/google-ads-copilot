@@ -149,7 +149,7 @@ See `data/export-formats.md` for recommended format.
 **Trigger:** 3+ clear waste terms identified with combined spend > $50 (or any single term > $25 waste).
 
 Create a draft using `drafts/templates/negative-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-negatives.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-negatives.md`
 - Include every recommended negative with: keyword, match type, scope, reason, spend wasted, collateral risk
 - Update `workspace/ads/drafts/_index.md`
 
@@ -157,7 +157,7 @@ Create a draft using `drafts/templates/negative-draft.md`:
 **Trigger:** Clear buyer language patterns identified that differ from current ad copy.
 
 Create a draft using `drafts/templates/rsa-draft.md`:
-- Write to `workspace/ads/drafts/YYYY-MM-DD-rsa-refresh.md`
+- Write to `workspace/ads/drafts/YYYY-MM-DD-[account-slug]-rsa-refresh.md`
 - Include specific headlines/descriptions derived from converting query language
 - Update `workspace/ads/drafts/_index.md`
 

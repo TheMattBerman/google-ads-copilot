@@ -4,6 +4,45 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLAUDE_TARGET="${CLAUDE_TARGET:-${HOME}/.claude/skills}"
 MODE="${1:-auto}"
+SOURCE_ROOT="$ROOT_DIR"
+TEMP_SOURCE_DIR=""
+
+cleanup() {
+  if [ -n "$TEMP_SOURCE_DIR" ] && [ -d "$TEMP_SOURCE_DIR" ]; then
+    rm -rf "$TEMP_SOURCE_DIR"
+  fi
+}
+trap cleanup EXIT
+
+resolve_source_root() {
+  local candidate="$1"
+
+  if [ -d "$candidate" ]; then
+    echo "$(cd "$candidate" && pwd)"
+    return 0
+  fi
+
+  if [ -f "$candidate" ]; then
+    TEMP_SOURCE_DIR="$(mktemp -d)"
+    tar -xzf "$candidate" -C "$TEMP_SOURCE_DIR"
+    local extracted_root
+    extracted_root=$(find "$TEMP_SOURCE_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+    if [ -z "$extracted_root" ]; then
+      echo "Failed to locate extracted bundle root in $candidate" >&2
+      exit 1
+    fi
+    echo "$extracted_root"
+    return 0
+  fi
+
+  echo "Bundle path not found: $candidate" >&2
+  exit 1
+}
+
+if [ $# -gt 0 ] && [ -e "$1" ]; then
+  SOURCE_ROOT="$(resolve_source_root "$1")"
+  MODE="${2:-auto}"
+fi
 
 resolve_openclaw_target() {
   if [ -n "${OPENCLAW_TARGET:-}" ]; then
@@ -30,8 +69,8 @@ copy_tree() {
 install_claude_style() {
   echo "Installing Claude/OpenClaw-compatible skill directories into $CLAUDE_TARGET"
   mkdir -p "$CLAUDE_TARGET"
-  copy_tree "$ROOT_DIR/google-ads" "$CLAUDE_TARGET/google-ads"
-  for skill_dir in "$ROOT_DIR"/skills/*; do
+  copy_tree "$SOURCE_ROOT/google-ads" "$CLAUDE_TARGET/google-ads"
+  for skill_dir in "$SOURCE_ROOT"/skills/*; do
     name="$(basename "$skill_dir")"
     copy_tree "$skill_dir" "$CLAUDE_TARGET/$name"
   done
@@ -40,33 +79,33 @@ install_claude_style() {
 install_openclaw_local_bundle() {
   echo "Installing bundled package into $OPENCLAW_TARGET"
   mkdir -p "$OPENCLAW_TARGET"
-  copy_tree "$ROOT_DIR/google-ads" "$OPENCLAW_TARGET/google-ads"
-  copy_tree "$ROOT_DIR/skills" "$OPENCLAW_TARGET/skills"
-  copy_tree "$ROOT_DIR/drafts" "$OPENCLAW_TARGET/drafts"
-  copy_tree "$ROOT_DIR/evals" "$OPENCLAW_TARGET/evals"
-  copy_tree "$ROOT_DIR/workspace-template" "$OPENCLAW_TARGET/workspace-template"
-  copy_tree "$ROOT_DIR/scripts" "$OPENCLAW_TARGET/scripts"
+  copy_tree "$SOURCE_ROOT/google-ads" "$OPENCLAW_TARGET/google-ads"
+  copy_tree "$SOURCE_ROOT/skills" "$OPENCLAW_TARGET/skills"
+  copy_tree "$SOURCE_ROOT/drafts" "$OPENCLAW_TARGET/drafts"
+  copy_tree "$SOURCE_ROOT/evals" "$OPENCLAW_TARGET/evals"
+  copy_tree "$SOURCE_ROOT/workspace-template" "$OPENCLAW_TARGET/workspace-template"
+  copy_tree "$SOURCE_ROOT/scripts" "$OPENCLAW_TARGET/scripts"
 
   # Data layer — copy docs but exclude credentials
   mkdir -p "$OPENCLAW_TARGET/data"
-  for f in "$ROOT_DIR"/data/*.md; do
+  for f in "$SOURCE_ROOT"/data/*.md; do
     [ -f "$f" ] && cp "$f" "$OPENCLAW_TARGET/data/"
   done
 
   # Examples — public only (exclude internal/)
   mkdir -p "$OPENCLAW_TARGET/examples"
-  for f in "$ROOT_DIR"/examples/*.md; do
+  for f in "$SOURCE_ROOT"/examples/*.md; do
     [ -f "$f" ] && cp "$f" "$OPENCLAW_TARGET/examples/"
   done
 
   # Top-level docs
-  cp "$ROOT_DIR"/README.md "$OPENCLAW_TARGET"/README.md
-  cp "$ROOT_DIR"/ARCHITECTURE.md "$OPENCLAW_TARGET"/ARCHITECTURE.md
-  cp "$ROOT_DIR"/APPLY-LAYER.md "$OPENCLAW_TARGET"/APPLY-LAYER.md 2>/dev/null || true
-  cp "$ROOT_DIR"/OPERATOR-PLAYBOOK.md "$OPENCLAW_TARGET"/OPERATOR-PLAYBOOK.md
-  cp "$ROOT_DIR"/DEMO-WORKFLOW.md "$OPENCLAW_TARGET"/DEMO-WORKFLOW.md
-  cp "$ROOT_DIR"/CHANGELOG.md "$OPENCLAW_TARGET"/CHANGELOG.md
-  cp "$ROOT_DIR"/LICENSE "$OPENCLAW_TARGET"/LICENSE
+  cp "$SOURCE_ROOT"/README.md "$OPENCLAW_TARGET"/README.md
+  cp "$SOURCE_ROOT"/ARCHITECTURE.md "$OPENCLAW_TARGET"/ARCHITECTURE.md
+  cp "$SOURCE_ROOT"/APPLY-LAYER.md "$OPENCLAW_TARGET"/APPLY-LAYER.md 2>/dev/null || true
+  cp "$SOURCE_ROOT"/OPERATOR-PLAYBOOK.md "$OPENCLAW_TARGET"/OPERATOR-PLAYBOOK.md
+  cp "$SOURCE_ROOT"/DEMO-WORKFLOW.md "$OPENCLAW_TARGET"/DEMO-WORKFLOW.md
+  cp "$SOURCE_ROOT"/CHANGELOG.md "$OPENCLAW_TARGET"/CHANGELOG.md
+  cp "$SOURCE_ROOT"/LICENSE "$OPENCLAW_TARGET"/LICENSE
 }
 
 case "$MODE" in
@@ -82,6 +121,7 @@ case "$MODE" in
     ;;
   *)
     echo "Usage: $0 [auto|claude|openclaw]"
+    echo "       $0 <bundle-path> [auto|claude|openclaw]"
     echo "Override targets with CLAUDE_TARGET=... or OPENCLAW_TARGET=..."
     exit 1
     ;;
