@@ -103,8 +103,7 @@ ORDER BY metrics.cost_micros DESC
 LIMIT 500
 ```
 
-**PMax fallback for audit:**
-If the classic search-term query returns empty but the account has active spend, detect whether spend is concentrated in `PERFORMANCE_MAX`. If yes, recover query visibility via `campaign_search_term_view` on the dominant campaign and mark the audit as **PMax visibility-limited** wherever classic term-level metrics are unavailable.
+**Retrieval ladder** — if the search-term query returns no rows, follow the shared retrieval ladder in `data/search-term-retrieval.md`. Report the resulting `retrieval_mode` in the audit header. Mark search-term sections as "PMax visibility-limited" when operating in `pmax-fallback` mode. In `limited` mode, note the gap and request a UI export.
 
 **5. Ad group structure:**
 ```sql

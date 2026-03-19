@@ -105,10 +105,7 @@ Ask the user for:
 3. Compare PMax vs. Search on shared conversion actions.
 4. Look for branded cannibalization signals.
 5. Assess asset group quality.
-6. Attempt PMax query visibility recovery when useful:
-   - resolve the specific PMax `campaign.id`
-   - query `campaign_search_term_view` filtered to the campaign resource
-   - probe `campaign_search_term_insight` with a single-campaign filter when needed
+6. Attempt PMax query visibility recovery using Steps 5/5b from the shared retrieval ladder (`data/search-term-retrieval.md`).
 7. Separate **direct evidence** from **inference**. Query rows from PMax are useful, but they do not automatically carry the same term-level cost / CPA detail as classic Search reports.
 8. Identify what should be protected in dedicated Search campaigns.
 

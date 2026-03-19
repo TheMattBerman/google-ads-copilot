@@ -50,46 +50,7 @@ ORDER BY metrics.cost_micros DESC
 LIMIT 500
 ```
 
-**PMax fallback protocol — required when Search rows come back empty but spend is active:**
-1. Pull top campaigns for the period.
-2. If the top-spend active campaign is `PERFORMANCE_MAX`, switch to PMax fallback mode.
-3. Resolve the specific PMax `campaign.id` first.
-4. Query `campaign_search_term_view` filtered to that single campaign resource.
-5. If available, also probe `campaign_search_term_insight` **with a single-campaign filter**. Google requires `campaign_search_term_insight.campaign_id = <id>` in the WHERE clause.
-6. If rows are returned but metrics are not available on that surface, say so explicitly and return **query-row visibility only** plus campaign / asset-group context. Do not pretend you have classic Search-term cost-per-term detail when you do not.
-
-**PMax fallback example:**
-```sql
--- Step 1: resolve the PMax campaign id
-SELECT
-  campaign.id,
-  campaign.name,
-  campaign.advertising_channel_type,
-  metrics.cost_micros
-FROM campaign
-WHERE segments.date DURING LAST_30_DAYS
-ORDER BY metrics.cost_micros DESC
-LIMIT 10
-
--- Step 2: pull campaign-scoped PMax search query rows
-SELECT
-  campaign_search_term_view.search_term,
-  campaign_search_term_view.campaign
-FROM campaign_search_term_view
-WHERE campaign_search_term_view.campaign = 'customers/1234567890/campaigns/23456012538'
-  AND segments.date DURING LAST_30_DAYS
-LIMIT 100
-
--- Step 3: optional insight probe (single campaign filter required)
-SELECT
-  campaign_search_term_insight.category_label,
-  campaign_search_term_insight.id,
-  campaign_search_term_insight.campaign_id
-FROM campaign_search_term_insight
-WHERE campaign_search_term_insight.campaign_id = 23456012538
-  AND segments.date DURING LAST_30_DAYS
-LIMIT 100
-```
+**Retrieval ladder** — if the primary query returns no rows, follow the shared retrieval ladder in `data/search-term-retrieval.md`. The ladder walks through account-wide → search-only → campaign enumeration → campaign-scoped classic → PMax `campaign_search_term_view` → limited visibility. Each step labels its `retrieval_mode` and the diagnostics shape is defined in that doc. Report the retrieval mode in the output header. In `pmax-fallback` mode, present query rows but do not fabricate cost/CPA analysis. In `limited` mode, shift to campaign/asset-group/tracking analysis and request a UI export.
 
 **Supplementary: High-spend zero-conversion terms (waste hunt):**
 ```sql
@@ -169,11 +130,9 @@ See `data/export-formats.md` for recommended format.
 
 ## Process
 1. **Announce mode** (connected/export).
-2. In connected mode, try the classic Search path first.
-3. If `search_term_view` returns empty but the account has active spend, inspect top campaigns for the period.
-4. If spend is concentrated in `PERFORMANCE_MAX`, switch to **PMax fallback mode** using `campaign_search_term_view` and campaign-scoped `campaign_search_term_insight`.
-5. If PMax fallback returns rows but not rich term-level metrics, say so explicitly and continue in **query-row visibility mode** instead of failing empty.
-6. Review terms by spend, conversions, CPA/ROAS, and recurring modifiers when those metrics are available.
+2. In connected mode, run the shared retrieval ladder (`data/search-term-retrieval.md`). Report the resulting `retrieval_mode` in the output header.
+3. If retrieval mode is `pmax-fallback`, present query rows but do not fabricate cost/CPA analysis. If `limited`, shift to campaign/asset-group/tracking analysis and request a UI export.
+4. Review terms by spend, conversions, CPA/ROAS, and recurring modifiers when those metrics are available.
 7. Group terms into meaningful clusters (buyer intent, comparison, informational, junk, branded).
 8. Cross-reference against existing negatives — don't re-recommend what's already excluded.
 9. **Cross-reference against keyword_view** when keyword rows exist — identify which targeted keywords triggered wasteful search terms. If a single broad-match keyword is responsible for multiple waste clusters, recommend narrowing/pausing that keyword alongside (or instead of) adding negatives.
