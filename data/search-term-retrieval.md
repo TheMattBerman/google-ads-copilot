@@ -8,7 +8,7 @@ Shared retrieval spec for all search-term-dependent skills. Every skill that nee
 
 ## The Ladder
 
-Execute steps in order. Stop at the first step that produces usable rows.
+Execute steps in order. For classic `search_term_view` surfaces, "usable rows" means rows plus at least `$5` of spend (`metrics.cost_micros >= 5000000`) in the current probe window. Stop at the first step that produces usable rows.
 
 ### Step 1 — Account-wide `search_term_view`
 
@@ -30,7 +30,7 @@ ORDER BY metrics.cost_micros DESC
 LIMIT 500
 ```
 
-**Success →** `retrieval_mode: classic`, full per-term metrics available. Done.
+**Success →** `retrieval_mode: classic`, full per-term metrics available. If rows exist but spend is below `$5`, continue down the ladder and widen the date window.
 
 ### Step 2 — Search-only `search_term_view`
 
@@ -38,7 +38,7 @@ Same query with `AND campaign.advertising_channel_type = 'SEARCH'`.
 
 Isolates Search campaigns from the query. Useful when account-wide returns errors due to incompatible campaign types.
 
-**Success →** `retrieval_mode: classic-search-only`. Full per-term metrics, but only for Search campaigns.
+**Success →** `retrieval_mode: classic-search-only`. Full per-term metrics, but only for Search campaigns. If rows exist but spend is below `$5`, continue down the ladder and widen the date window.
 
 ### Step 3 — Campaign enumeration
 
@@ -79,11 +79,13 @@ SELECT
   metrics.conversions
 FROM search_term_view
 WHERE segments.date DURING LAST_30_DAYS
-  AND campaign.name = '<campaign_name>'
+  AND campaign.resource_name = 'customers/<cid>/campaigns/<campaign_id>'
 LIMIT 200
 ```
 
-**Success →** `retrieval_mode: classic-campaign-scoped`. Per-term metrics available, scoped to individual Search campaigns.
+Aggregate rows and spend across all Search campaigns in the current window.
+
+**Success →** `retrieval_mode: classic-campaign-scoped`. Per-term metrics available, scoped to individual Search campaigns, with combined spend of at least `$5`.
 
 ### Step 5 — PMax campaign-scoped `campaign_search_term_view`
 
@@ -99,7 +101,7 @@ WHERE campaign_search_term_view.campaign = 'customers/<cid>/campaigns/<campaign_
 LIMIT 100
 ```
 
-**Success →** `retrieval_mode: pmax-fallback`. Query rows available, but **no per-term cost/CPA/conversion metrics**. Language signal only.
+**Success →** `retrieval_mode: pmax-fallback`. Query rows available, but **no per-term cost/CPA/conversion metrics**. Language signal only. The `$5` spend threshold does **not** apply here because `campaign_search_term_view` does not expose per-term spend.
 
 ### Step 5b — PMax `campaign_search_term_insight` probe
 
@@ -128,14 +130,14 @@ If no step above produced rows, the account has insufficient search-term visibil
 
 ## Date Range Fallback
 
-Applied **within** each ladder step. If a step returns 0 rows or <$5 total spend:
+Applied by retrying the ladder across progressively broader windows. If the classic search-term steps return 0 rows or less than `$5` of spend:
 
 1. `DURING LAST_30_DAYS` (default)
-2. `DURING LAST_90_DAYS`
-3. `DURING LAST_12_MONTHS`
-4. No date filter (all time)
+2. `DURING LAST_14_DAYS`
+3. `BETWEEN <90-days-ago> AND <today>`
+4. `BETWEEN <365-days-ago> AND <today>`
 
-Always report which date range produced the data.
+Always report which date range produced the final result.
 
 ---
 
@@ -155,6 +157,8 @@ Every retrieval run produces a diagnostic header for the consuming skill:
 - PMax campaigns without rows: <list or "none">
 - Visibility notes: <any caveats>
 ```
+
+When classic rows exist but stay below the spend threshold, note that explicitly before moving to the next step or date window.
 
 ### Retrieval modes and what they mean for consumers
 

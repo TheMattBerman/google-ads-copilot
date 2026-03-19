@@ -9,12 +9,13 @@ Shared verification path for answering:
 
 1. **Campaign-level negatives** via `campaign_criterion`
 2. **Ad-group-level negatives** via `ad_group_criterion`
-3. **Shared negative lists** via `shared_set` (minimal fields first)
-4. **Campaign/shared-list attachments** via `campaign_shared_set`
-5. **Shared-list keyword members** via `shared_criterion`
+3. **Shared sets (minimal discovery)** via `shared_set`
+4. **Shared-set type verification** via `shared_set.resource_name`, `shared_set.name`, `shared_set.type`
+5. **Campaign/shared negative-list attachments** via `campaign_shared_set` after filtering to verified `NEGATIVE_KEYWORDS` shared sets
+6. **Shared negative-list keyword members** via `shared_criterion` after filtering to verified `NEGATIVE_KEYWORDS` shared sets
 
 ## Important implementation detail
-For shared-list resources, start with minimal field sets first.
+For shared-set resources, start with minimal field sets first.
 Do not assume `type`, `status`, or enum filters will work on the first query path through MCP.
 
 Prefer these minimal queries first:
@@ -45,16 +46,22 @@ LIMIT 200
 
 Once those work, you can enrich the query shape if needed.
 
+When typed verification works, only call something a "shared negative list" if `shared_set.type = NEGATIVE_KEYWORDS`.
+If typed verification fails, keep the output generic (`shared sets`, `shared-set attachments`, `shared-set keyword members`) and add a diagnostic note that negative-list type could not be verified.
+
 ## Diagnostic output shape
 
 ```md
 ## Negative Inventory Diagnostics
 - Campaign negatives: <count>
 - Ad-group negatives: <count>
-- Shared negative lists: <count>
-- Shared-list attachments: <count>
-- Shared-list keyword members: <count>
-- Verification result: <none found anywhere | negatives are active in the account>
+- Shared sets discovered: <count>
+- Shared negative lists: <count>  # only when type verification succeeds
+- Shared negative-list attachments: <count>  # only when type verification succeeds
+- Shared negative-list keyword members: <count>  # only when type verification succeeds
+- Shared-set type verification: unavailable  # when typed verification fails
+- Diagnostic note: <type verification note>
+- Verification result: <none found anywhere | negatives are active in the account | shared-set negatives could not be verified>
 ```
 
 ## Script reference

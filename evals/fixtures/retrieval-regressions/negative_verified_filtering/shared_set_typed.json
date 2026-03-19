@@ -1,0 +1,1 @@
+{"results":[{"shared_set.resource_name":"customers/1234567890/sharedSets/neg-1","shared_set.name":"Account negatives","shared_set.type":"NEGATIVE_KEYWORDS"},{"shared_set.resource_name":"customers/1234567890/sharedSets/place-1","shared_set.name":"Placement exclusions","shared_set.type":"PLACEMENT_LIST"}]}

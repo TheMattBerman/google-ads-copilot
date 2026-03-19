@@ -15,6 +15,7 @@ set -euo pipefail
 
 CID="${1:-}"
 DATE_CONDITION="${2:-}"
+MIN_SPEND_MICROS=5000000
 
 if [[ -z "$CID" ]]; then
   echo "Usage: $0 <customer-id> [date-condition]" >&2
@@ -54,6 +55,16 @@ extract_field_values() {
 count_rows() {
   local key="$1"
   python3 -c 'import re, sys; key=sys.argv[1]; text=sys.stdin.read(); print(len(re.findall(r"\"%s\":" % re.escape(key), text)))' "$key"
+}
+
+sum_numeric_field() {
+  local key="$1"
+  python3 -c 'import re, sys; key=sys.argv[1]; text=sys.stdin.read(); print(sum(int(m.group(1)) for m in re.finditer(r"\"%s\":\s*([0-9]+)" % re.escape(key), text)))' "$key"
+}
+
+format_micros_as_dollars() {
+  local micros="${1:-0}"
+  python3 -c 'import sys; micros=int(sys.argv[1]); print(f"${micros / 1_000_000:.2f}")' "$micros"
 }
 
 classify_campaign_type() {
@@ -116,13 +127,9 @@ PMAX_WITHOUT_ROWS=""
 VISIBILITY_NOTES=""
 USED_DATE_CONDITION=""
 
-# Campaign arrays (populated in Step 3, used in Steps 4+5)
-declare -a IDS=()
-declare -a NAMES=()
-declare -a CTYPES=()
-
 echo "## Search Term Retrieval Ladder"
 echo "- Customer ID: $CID"
+echo "- Minimum spend threshold for classic search-term surfaces: $(format_micros_as_dollars "$MIN_SPEND_MICROS")"
 echo
 
 # --- iterate date fallback chain ---
@@ -131,14 +138,30 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
   echo "### Trying date condition: $dc"
   echo
   USED_DATE_CONDITION="$dc"
+  TOTAL_ROWS=0
+  CAMPAIGNS_TOTAL=0
+  CAMPAIGNS_SEARCH=0
+  CAMPAIGNS_PMAX=0
+  CAMPAIGNS_OTHER=0
+  SEARCH_WITH_ROWS=""
+  PMAX_WITH_ROWS=""
+  PMAX_WITHOUT_ROWS=""
+  VISIBILITY_NOTES=""
+
+  # Campaign arrays (populated in Step 3, used in Steps 4+5)
+  declare -a IDS=()
+  declare -a NAMES=()
+  declare -a CTYPES=()
 
   # Step 1: Account-wide search_term_view
   echo "#### Step 1 — Account-wide search_term_view"
   STEP1_OUT=$(call "$(query_account_wide "$dc")" 2>&1 || true)
   STEP1_ROWS=$(printf '%s\n' "$STEP1_OUT" | count_rows "search_term_view.search_term")
+  STEP1_SPEND=$(printf '%s\n' "$STEP1_OUT" | sum_numeric_field "metrics.cost_micros")
   echo "Rows: $STEP1_ROWS"
+  echo "Spend: $(format_micros_as_dollars "$STEP1_SPEND")"
 
-  if [[ "$STEP1_ROWS" -gt 0 ]]; then
+  if [[ "$STEP1_ROWS" -gt 0 && "$STEP1_SPEND" -ge "$MIN_SPEND_MICROS" ]]; then
     RETRIEVAL_MODE="classic"
     TOTAL_ROWS=$STEP1_ROWS
     echo "Result: classic mode succeeded at account scope."
@@ -147,16 +170,22 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
     echo
     break
   fi
-  echo "Result: no rows. Trying Step 2."
+  if [[ "$STEP1_ROWS" -gt 0 ]]; then
+    echo "Result: rows found, but spend is below the $(format_micros_as_dollars "$MIN_SPEND_MICROS") threshold. Trying Step 2."
+  else
+    echo "Result: no rows. Trying Step 2."
+  fi
   echo
 
   # Step 2: Search-only search_term_view
   echo "#### Step 2 — Search-only search_term_view"
   STEP2_OUT=$(call "$(query_search_only "$dc")" 2>&1 || true)
   STEP2_ROWS=$(printf '%s\n' "$STEP2_OUT" | count_rows "search_term_view.search_term")
+  STEP2_SPEND=$(printf '%s\n' "$STEP2_OUT" | sum_numeric_field "metrics.cost_micros")
   echo "Rows: $STEP2_ROWS"
+  echo "Spend: $(format_micros_as_dollars "$STEP2_SPEND")"
 
-  if [[ "$STEP2_ROWS" -gt 0 ]]; then
+  if [[ "$STEP2_ROWS" -gt 0 && "$STEP2_SPEND" -ge "$MIN_SPEND_MICROS" ]]; then
     RETRIEVAL_MODE="classic-search-only"
     TOTAL_ROWS=$STEP2_ROWS
     echo "Result: classic-search-only mode succeeded."
@@ -165,16 +194,31 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
     echo
     break
   fi
-  echo "Result: no rows. Trying Step 3."
+  if [[ "$STEP2_ROWS" -gt 0 ]]; then
+    echo "Result: rows found, but spend is below the $(format_micros_as_dollars "$MIN_SPEND_MICROS") threshold. Trying Step 3."
+  else
+    echo "Result: no rows. Trying Step 3."
+  fi
   echo
 
   # Step 3: Campaign enumeration
   echo "#### Step 3 — Campaign enumeration"
   CAMPAIGNS_OUT=$(call "$(query_campaigns "$dc")" 2>&1 || true)
 
-  mapfile -t IDS < <(printf '%s\n' "$CAMPAIGNS_OUT" | extract_field_values "campaign.id")
-  mapfile -t NAMES < <(printf '%s\n' "$CAMPAIGNS_OUT" | extract_field_values "campaign.name")
-  mapfile -t RAW_TYPES < <(printf '%s\n' "$CAMPAIGNS_OUT" | extract_field_values "campaign.advertising_channel_type")
+  IDS=()
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && IDS+=("$value")
+  done < <(printf '%s\n' "$CAMPAIGNS_OUT" | extract_field_values "campaign.id")
+
+  NAMES=()
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && NAMES+=("$value")
+  done < <(printf '%s\n' "$CAMPAIGNS_OUT" | extract_field_values "campaign.name")
+
+  RAW_TYPES=()
+  while IFS= read -r value; do
+    [[ -n "$value" ]] && RAW_TYPES+=("$value")
+  done < <(printf '%s\n' "$CAMPAIGNS_OUT" | extract_field_values "campaign.advertising_channel_type")
 
   CAMPAIGNS_TOTAL=${#IDS[@]}
   CAMPAIGNS_SEARCH=0
@@ -208,7 +252,8 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
   # Step 4: Campaign-scoped classic retrieval (Search campaigns)
   if [[ "$CAMPAIGNS_SEARCH" -gt 0 ]]; then
     echo "#### Step 4 — Campaign-scoped classic retrieval (Search campaigns)"
-    STEP4_FOUND=0
+    STEP4_ROWS_TOTAL=0
+    STEP4_SPEND_TOTAL=0
 
     for i in "${!IDS[@]}"; do
       [[ "${CTYPES[$i]}" == "search" ]] || continue
@@ -218,11 +263,13 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
       echo "##### $name (Search, ID: $id)"
       OUT=$(call "$(query_campaign_scoped_classic "$dc" "$id")" 2>&1 || true)
       ROWS=$(printf '%s\n' "$OUT" | count_rows "search_term_view.search_term")
+      SPEND=$(printf '%s\n' "$OUT" | sum_numeric_field "metrics.cost_micros")
       echo "Rows: $ROWS"
+      echo "Spend: $(format_micros_as_dollars "$SPEND")"
 
       if [[ "$ROWS" -gt 0 ]]; then
-        STEP4_FOUND=1
-        TOTAL_ROWS=$((TOTAL_ROWS + ROWS))
+        STEP4_ROWS_TOTAL=$((STEP4_ROWS_TOTAL + ROWS))
+        STEP4_SPEND_TOTAL=$((STEP4_SPEND_TOTAL + SPEND))
         SEARCH_WITH_ROWS="${SEARCH_WITH_ROWS:+$SEARCH_WITH_ROWS, }$name"
         echo "$OUT"
       else
@@ -231,16 +278,24 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
       echo
     done
 
-    if [[ "$STEP4_FOUND" -eq 1 ]]; then
+    if [[ "$STEP4_ROWS_TOTAL" -gt 0 && "$STEP4_SPEND_TOTAL" -ge "$MIN_SPEND_MICROS" ]]; then
       RETRIEVAL_MODE="classic-campaign-scoped"
+      TOTAL_ROWS=$STEP4_ROWS_TOTAL
+      echo "Result: campaign-scoped classic retrieval succeeded with combined spend $(format_micros_as_dollars "$STEP4_SPEND_TOTAL")."
+      echo
       break
+    fi
+
+    if [[ "$STEP4_ROWS_TOTAL" -gt 0 ]]; then
+      echo "Result: Search campaigns produced rows, but combined spend $(format_micros_as_dollars "$STEP4_SPEND_TOTAL") is below the $(format_micros_as_dollars "$MIN_SPEND_MICROS") threshold. Trying Step 5."
+      echo
     fi
   fi
 
   # Step 5: PMax campaign-scoped retrieval
   if [[ "$CAMPAIGNS_PMAX" -gt 0 ]]; then
     echo "#### Step 5 — PMax campaign-scoped retrieval"
-    STEP5_FOUND=0
+    STEP5_ROWS_TOTAL=0
 
     for i in "${!IDS[@]}"; do
       [[ "${CTYPES[$i]}" == "pmax" ]] || continue
@@ -256,8 +311,7 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
       echo "Rows: $ROWS"
 
       if [[ "$ROWS" -gt 0 ]]; then
-        STEP5_FOUND=1
-        TOTAL_ROWS=$((TOTAL_ROWS + ROWS))
+        STEP5_ROWS_TOTAL=$((STEP5_ROWS_TOTAL + ROWS))
         PMAX_WITH_ROWS="${PMAX_WITH_ROWS:+$PMAX_WITH_ROWS, }$name"
         echo "$OUT"
       else
@@ -277,9 +331,10 @@ for dc in "${DATE_FALLBACK_CHAIN[@]}"; do
       echo
     done
 
-    if [[ "$STEP5_FOUND" -eq 1 ]]; then
+    if [[ "$STEP5_ROWS_TOTAL" -gt 0 ]]; then
       RETRIEVAL_MODE="pmax-fallback"
-      VISIBILITY_NOTES="PMax rows are query text only — no per-term cost/CPA/conversion metrics."
+      TOTAL_ROWS=$STEP5_ROWS_TOTAL
+      VISIBILITY_NOTES="PMax rows are query text only — no per-term cost/CPA/conversion metrics. Spend thresholding applies only to classic search_term_view surfaces."
       break
     fi
   fi
@@ -316,6 +371,7 @@ case "$RETRIEVAL_MODE" in
   pmax-fallback)
     echo "## Operator Guidance"
     echo "PMax query rows available as language signal. Per-term cost/CPA/conversion metrics are NOT available."
+    echo "- Spend thresholding only applies to classic search_term_view surfaces."
     echo "- Negatives: only recommend for extremely obvious junk terms."
     echo "- Intent map: use rows for clustering, but performance profiling is unavailable."
     echo "- RSAs: use rows for buyer-language extraction only."
